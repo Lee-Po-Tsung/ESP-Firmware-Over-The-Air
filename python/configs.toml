@@ -1,0 +1,6 @@
+[setting]
+host = "0.0.0.0"
+ip = 8000
+[path]
+firmware = "./firmware"
+version_list = "./version.json"
