@@ -78,6 +78,7 @@ def clean():
     versionList.clear()
     remove(VERSION_PATH)
     rmdir(FIRMWARE_PATH)
+    return {"status": 1}
 
 
 if __name__ == '__main__':
