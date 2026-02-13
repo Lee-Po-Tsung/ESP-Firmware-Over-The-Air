@@ -1,4 +1,4 @@
-from flask import Flask, render_template_string, send_file, redirect, request
+from flask import Flask, render_template_string, send_file, redirect, request, abort
 from pathlib import Path
 import tomllib
 import json
@@ -28,11 +28,23 @@ def root():
 def firmware_list():
     return render_template_string("""<form method='post' action='/firmware/upload' enctype="multipart/form-data"><label for='version'>版本</label><input type='text' name='version'/><br>
                                   <label for='firmware'>韌體檔案<label/><input type='file' name='firmware'/><br>
-                                  <input type='submit'></form>""")
+                                  <input type='submit'></form><br>
+                                  <table><thead><tr><th>檔名</th><th>版本</th></tr></thead>
+                                  <tbody>{% for k, v in versionList.items() %}<tr><td>{{v}}</td><td>{{k}}</td></tr>{% endfor %}</tbody>
+                                  </table>""", versionList=versionList)
 
 @app.route("/firmware/<version>")
 def firmware(version: str):
-    return send_file(version)
+    if version not in versionList:
+        return abort(404)
+    return send_file(FIRMWARE_PATH / versionList[version])
+
+@app.route("/firmware/leatest")
+def firmware_latest():
+    if versionList == {}:
+        return abort(404)
+    latest_version = list(versionList.keys())[-1]
+    return send_file(FIRMWARE_PATH / versionList[latest_version])
 
 @app.route("/firmware/upload", methods=["POST"])
 def upload():
