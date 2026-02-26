@@ -1,8 +1,17 @@
-from flask import Flask, render_template_string, send_file, redirect, request, abort
+from flask import Flask, render_template_string, send_file, redirect, request, abort, make_response
 from pathlib import Path
 import tomllib
 import json
 from os import chdir, remove, rmdir
+import datetime
+import hashlib
+
+def calculate_md5(filename):
+    md5 = hashlib.md5()
+    with open(filename, "rb") as f:
+        for chunk in iter(lambda: f.read(4096), b""):
+            md5.update(chunk)
+    return md5.hexdigest()
 
 CURPATH = Path(__file__).parent
 chdir(CURPATH)
@@ -39,12 +48,25 @@ def firmware(version: str):
         return abort(404)
     return send_file(FIRMWARE_PATH / versionList[version])
 
-@app.route("/firmware/leatest")
+@app.route("/firmware/latest", methods=["GET", "HEAD"])
 def firmware_latest():
     if versionList == {}:
         return abort(404)
     latest_version = list(versionList.keys())[-1]
-    return send_file(FIRMWARE_PATH / versionList[latest_version])
+    filepath = FIRMWARE_PATH / versionList[latest_version]
+
+    md5_value = calculate_md5(filepath)
+    file_size = filepath.stat().st_size
+
+    res = make_response(send_file(
+        FIRMWARE_PATH / versionList[latest_version],
+        mimetype="application/octet-stream",
+        as_attachment=True
+    ))
+    res.headers["X-Version"] = latest_version
+    res.headers["X-MD5"] = md5_value
+
+    return res
 
 @app.route("/firmware/upload", methods=["POST"])
 def upload():
@@ -54,8 +76,12 @@ def upload():
     firmware = request.files.get("firmware")
     if not version or not firmware:
         return {"status": 0, "message": "Missing version or firmware file"}
-    firmware.save(FIRMWARE_PATH / firmware.filename)
-    versionList[version] = firmware.filename
+    if version in versionList:
+        return {"status": 0, "message": "Version already exists"}
+    now = datetime.datetime.now()
+    datetime_str = now.strftime('%y%m%d_%H%M%S')
+    firmware.save(FIRMWARE_PATH / (datetime_str + "_" + firmware.filename))
+    versionList[version] = datetime_str + "_" + firmware.filename
     with open(VERSION_PATH, "w", encoding="utf-8") as file:
         json.dump(versionList, file)
     return {"status": 1}
