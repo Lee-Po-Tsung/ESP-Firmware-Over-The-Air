@@ -1,19 +1,19 @@
 #define FIRMWARE_VERSION "1.2.5"
 // include http lib
-#include <WiFi.h>
 #include <HTTPClient.h>
 #include <NetworkClientSecure.h>
+#include <WiFi.h>
 // update lib
-#include <Update.h>
-
 #include <FS.h>
 #include <LittleFS.h>
+#include <Update.h>
+
 #include "LittleFSTest.h"
 
 // gargs
 const String ssid = "sumimi";
 const String password = "Q9988551";
-const String firmware_url = "https://leepotsung.pythonanywhere.com/firmware/latest"; 
+const String firmware_url = "https://leepotsung.pythonanywhere.com/firmware/latest";
 
 const char* rootCACertificate = R"string_literal(
 -----BEGIN CERTIFICATE-----
@@ -58,38 +58,32 @@ void printProgress(size_t progress, size_t total) {
 }
 
 bool initWiFi() {
-  WiFi.begin(ssid, password);
+    WiFi.begin(ssid, password);
 
-  int count = 0;
-  while (WiFi.status() != WL_CONNECTED && count < 10) {
-    delay(1000);
-    Serial.print(".");
-    ++count;
-  }
+    int count = 0;
+    while (WiFi.status() != WL_CONNECTED && count < 10) {
+        delay(1000);
+        Serial.print(".");
+        ++count;
+    }
 
-  if (WiFi.status() != WL_CONNECTED) {
-    Serial.println("\nWiFi connect failed");
-    return false;
-  }
-  Serial.println("\nWiFi connected");
-  return true;
+    if (WiFi.status() != WL_CONNECTED) {
+        Serial.println("\nWiFi connect failed");
+        return false;
+    }
+    Serial.println("\nWiFi connected");
+    return true;
 }
 
 bool checkFirmwareVersion(String url) {
-    NetworkClientSecure *client = new NetworkClientSecure;
+    NetworkClientSecure* client = new NetworkClientSecure;
     client->setCACert(rootCACertificate);
 
     HTTPClient https;
     https.begin(*client, url);
-    
+
     const char* headerKeys[] = {
-        "Date", 
-        "Content-Type", 
-        "Content-Length", 
-        "Content-Disposition", 
-        "X-Version", 
-        "X-MD5"
-    };
+        "Date", "Content-Type", "Content-Length", "Content-Disposition", "X-Version", "X-MD5"};
     size_t headerKeysCount = sizeof(headerKeys) / sizeof(headerKeys[0]);
     https.collectHeaders(headerKeys, headerKeysCount);
 
@@ -98,9 +92,7 @@ bool checkFirmwareVersion(String url) {
     if (httpCode == HTTP_CODE_OK) {
         int headerCount = https.headers();
         for (int i = 0; i < headerCount; i++) {
-            Serial.printf("%s: %s\n",
-                https.headerName(i).c_str(),
-                https.header(i).c_str());
+            Serial.printf("%s: %s\n", https.headerName(i).c_str(), https.header(i).c_str());
         }
         md5 = https.header("X-MD5");
         String version = https.header("X-Version");
@@ -109,19 +101,16 @@ bool checkFirmwareVersion(String url) {
         delete client;
         https.end();
         if (version == FIRMWARE_VERSION) {
-          Serial.println("版本號相同不進行更新");
-          return false;
+            Serial.println("版本號相同不進行更新");
+            return false;
+        } else if (md5 == "") {
+            Serial.println("缺少md5");
+            return false;
+        } else {
+            return true;
         }
-        else if (md5 == "") {
-          Serial.println("缺少md5");
-          return false;
-        }
-        else {
-          return true;
-        }
-    }
-    else {
-      Serial.printf("HTTP error: %d\n", httpCode);
+    } else {
+        Serial.printf("HTTP error: %d\n", httpCode);
     }
 
     delete client;
@@ -131,7 +120,7 @@ bool checkFirmwareVersion(String url) {
 
 void doOTA(String url) {
     Serial.println("start update");
-    NetworkClientSecure *client = new NetworkClientSecure;
+    NetworkClientSecure* client = new NetworkClientSecure;
     client->setCACert(rootCACertificate);
 
     HTTPClient https;
@@ -155,10 +144,10 @@ void doOTA(String url) {
             Serial.println("Not enough space");
             return;
         }
-        
+
         Update.setMD5(md5.c_str());
 
-        WiFiClient *stream = https.getStreamPtr();
+        WiFiClient* stream = https.getStreamPtr();
         size_t written = Update.writeStream(*stream);
 
         if (written == contentLength) {
@@ -179,45 +168,42 @@ void doOTA(String url) {
         } else {
             Serial.printf("Update error: %s\n", Update.errorString());
         }
-    }
-    else {
-      Serial.printf("HTTP error: %d\n", httpCode);
+    } else {
+        Serial.printf("HTTP error: %d\n", httpCode);
     }
 
     delete client;
     https.end();
 }
 
-
 // main
 void setup() {
-  Serial.begin(115200);
-  delay(5000);
-  pinMode(LED_BUILTIN, OUTPUT);
+    Serial.begin(115200);
+    delay(5000);
+    pinMode(LED_BUILTIN, OUTPUT);
 
-  if(!LittleFS.begin(true)){
-    Serial.println("LittleFS 掛載失敗");
-    return;
-  }
-  listDir(LittleFS, "/", 3);
-  
-  if (!initWiFi()) {
-    ESP.restart();
-  }
+    if (!LittleFS.begin(true)) {
+        Serial.println("LittleFS 掛載失敗");
+        return;
+    }
+    listDir(LittleFS, "/", 3);
+
+    if (!initWiFi()) {
+        ESP.restart();
+    }
 }
 
 void loop() {
-  if (WiFi.status() == WL_CONNECTED) {
-    if (checkFirmwareVersion(firmware_url)) {
-      doOTA(firmware_url);
+    if (WiFi.status() == WL_CONNECTED) {
+        if (checkFirmwareVersion(firmware_url)) {
+            doOTA(firmware_url);
+        }
+    } else {
+        if (!initWiFi()) {
+            ESP.restart();
+        }
     }
-  }
-  else {
-    if (!initWiFi()) {
-      ESP.restart();
-    }
-  }
-  // digitalWrite(LED_BUILTIN, HIGH);
-  delay(6000);
-  // digitalWrite(LED_BUILTIN, LOW);
+    // digitalWrite(LED_BUILTIN, HIGH);
+    delay(6000);
+    // digitalWrite(LED_BUILTIN, LOW);
 }

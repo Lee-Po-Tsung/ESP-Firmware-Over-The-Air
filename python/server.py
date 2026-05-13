@@ -6,12 +6,14 @@ from os import chdir, remove, rmdir
 import datetime
 import hashlib
 
+
 def calculate_md5(filename):
     md5 = hashlib.md5()
     with open(filename, "rb") as f:
         for chunk in iter(lambda: f.read(4096), b""):
             md5.update(chunk)
     return md5.hexdigest()
+
 
 CURPATH = Path(__file__).parent
 chdir(CURPATH)
@@ -29,24 +31,31 @@ if not VERSION_PATH.exists():
 with open(VERSION_PATH, "rb") as file:
     versionList = json.load(file)
 
+
 @app.route("/")
 def root():
     return redirect("/firmware")
 
+
 @app.route("/firmware")
 def firmware_list():
-    return render_template_string("""<form method='post' action='/firmware/upload' enctype="multipart/form-data"><label for='version'>版本</label><input type='text' name='version'/><br>
+    return render_template_string(
+        """<form method='post' action='/firmware/upload' enctype="multipart/form-data"><label for='version'>版本</label><input type='text' name='version'/><br>
                                   <label for='firmware'>韌體檔案<label/><input type='file' name='firmware'/><br>
                                   <input type='submit'></form><br>
                                   <table><thead><tr><th>檔名</th><th>版本</th></tr></thead>
                                   <tbody>{% for k, v in versionList.items() %}<tr><td>{{v}}</td><td>{{k}}</td></tr>{% endfor %}</tbody>
-                                  </table>""", versionList=versionList)
+                                  </table>""",
+        versionList=versionList,
+    )
+
 
 @app.route("/firmware/<version>")
 def firmware(version: str):
     if version not in versionList:
         return abort(404)
     return send_file(FIRMWARE_PATH / versionList[version])
+
 
 @app.route("/firmware/latest", methods=["GET", "HEAD"])
 def firmware_latest():
@@ -58,15 +67,18 @@ def firmware_latest():
     md5_value = calculate_md5(filepath)
     file_size = filepath.stat().st_size
 
-    res = make_response(send_file(
-        FIRMWARE_PATH / versionList[latest_version],
-        mimetype="application/octet-stream",
-        as_attachment=True
-    ))
+    res = make_response(
+        send_file(
+            FIRMWARE_PATH / versionList[latest_version],
+            mimetype="application/octet-stream",
+            as_attachment=True,
+        )
+    )
     res.headers["X-Version"] = latest_version
     res.headers["X-MD5"] = md5_value
 
     return res
+
 
 @app.route("/firmware/upload", methods=["POST"])
 def upload():
@@ -79,12 +91,13 @@ def upload():
     if version in versionList:
         return {"status": 0, "message": "Version already exists"}
     now = datetime.datetime.now()
-    datetime_str = now.strftime('%y%m%d_%H%M%S')
+    datetime_str = now.strftime("%y%m%d_%H%M%S")
     firmware.save(FIRMWARE_PATH / (datetime_str + "_" + firmware.filename))
     versionList[version] = datetime_str + "_" + firmware.filename
     with open(VERSION_PATH, "w", encoding="utf-8") as file:
         json.dump(versionList, file)
     return {"status": 1}
+
 
 @app.route("/delete/<version>")
 def deleteFW(version: str):
@@ -95,6 +108,7 @@ def deleteFW(version: str):
     with open(VERSION_PATH, "w", encoding="utf-8") as file:
         json.dump(versionList, file)
     return {"status": 1}
+
 
 @app.route("/clean")
 def clean():
@@ -107,7 +121,7 @@ def clean():
     return {"status": 1}
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     # from socket import gethostbyname, gethostname
     # if configs["setting"]["host"] == "0.0.0.0":
     #     print(f"http://{gethostbyname(gethostname())}:{configs['setting']['ip']}/")
