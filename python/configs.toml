@@ -4,3 +4,5 @@ ip = 8000
 [path]
 firmware = "./firmware"
 version_list = "./version.json"
+private_key = "./private_key.pem"
+public_key = "./public_key.pem"

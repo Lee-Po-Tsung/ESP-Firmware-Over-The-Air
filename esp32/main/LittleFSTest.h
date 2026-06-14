@@ -1,3 +1,16 @@
+#include <LittleFS.h>
+
+// Initialize and mount LittleFS
+bool initFS() {
+  if (!LittleFS.begin(true)) {
+    Serial.println("LittleFS mount failed!");
+    return false;
+  }
+  Serial.println("LittleFS mounted successfully!");
+  return true;
+}
+
+// List all files and directories in a given path
 void listDir(fs::FS &fs, const char *dirname, uint8_t levels) {
   Serial.printf("Listing directory: %s\r\n", dirname);
 
@@ -29,6 +42,7 @@ void listDir(fs::FS &fs, const char *dirname, uint8_t levels) {
   }
 }
 
+// Create a new directory
 void createDir(fs::FS &fs, const char *path) {
   Serial.printf("Creating Dir: %s\n", path);
   if (fs.mkdir(path)) {
@@ -38,6 +52,7 @@ void createDir(fs::FS &fs, const char *path) {
   }
 }
 
+// Remove an existing directory
 void removeDir(fs::FS &fs, const char *path) {
   Serial.printf("Removing Dir: %s\n", path);
   if (fs.rmdir(path)) {
@@ -47,6 +62,7 @@ void removeDir(fs::FS &fs, const char *path) {
   }
 }
 
+// Read the contents of a file and print to Serial
 void readFile(fs::FS &fs, const char *path) {
   Serial.printf("Reading file: %s\r\n", path);
 
@@ -63,6 +79,7 @@ void readFile(fs::FS &fs, const char *path) {
   file.close();
 }
 
+// Write a message to a file
 void writeFile(fs::FS &fs, const char *path, const char *message) {
   Serial.printf("Writing file: %s\r\n", path);
 
@@ -79,6 +96,7 @@ void writeFile(fs::FS &fs, const char *path, const char *message) {
   file.close();
 }
 
+// Append a message to the end of a file
 void appendFile(fs::FS &fs, const char *path, const char *message) {
   Serial.printf("Appending to file: %s\r\n", path);
 
@@ -95,6 +113,7 @@ void appendFile(fs::FS &fs, const char *path, const char *message) {
   file.close();
 }
 
+// Rename a file from one path to another
 void renameFile(fs::FS &fs, const char *path1, const char *path2) {
   Serial.printf("Renaming file %s to %s\r\n", path1, path2);
   if (fs.rename(path1, path2)) {
@@ -104,6 +123,7 @@ void renameFile(fs::FS &fs, const char *path1, const char *path2) {
   }
 }
 
+// Delete a file
 void deleteFile(fs::FS &fs, const char *path) {
   Serial.printf("Deleting file: %s\r\n", path);
   if (fs.remove(path)) {
@@ -113,8 +133,10 @@ void deleteFile(fs::FS &fs, const char *path) {
   }
 }
 
-// SPIFFS-like write and delete file, better use #define CONFIG_LITTLEFS_SPIFFS_COMPAT 1
+// SPIFFS-like write and delete file, better use #define
+// CONFIG_LITTLEFS_SPIFFS_COMPAT 1
 
+// Write a message to a file and create missing parent folders if necessary
 void writeFile2(fs::FS &fs, const char *path, const char *message) {
   if (!fs.exists(path)) {
     if (strchr(path, '/')) {
@@ -147,6 +169,7 @@ void writeFile2(fs::FS &fs, const char *path, const char *message) {
   file.close();
 }
 
+// Delete a file and iteratively remove empty parent folders
 void deleteFile2(fs::FS &fs, const char *path) {
   Serial.printf("Deleting file and empty folders on path: %s\r\n", path);
 
@@ -171,6 +194,7 @@ void deleteFile2(fs::FS &fs, const char *path) {
   }
 }
 
+// Test file I/O performance by writing and reading a large amount of data
 void testFileIO(fs::FS &fs, const char *path) {
   Serial.printf("Testing file I/O with %s\r\n", path);
 

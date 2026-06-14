@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+.env
+build/
+dist/
+*.egg-info/
+python/firmware
+python/*.json
+.vscode
+
+# Arduino / ESP32
+build/
+sketch/
+*.elf
+*.bin
+*.map
+*.o
+*.d
+libraries/
+esp32/test
+
+# Tools
+.pre-commit-config.yaml.bak
+.clang-format.bak
+
+# OS
+.DS_Store
+Thumbs.db
+*.pem
