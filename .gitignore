@@ -25,6 +25,7 @@ esp32/test
 # Tools
 .pre-commit-config.yaml.bak
 .clang-format.bak
+config.json
 
 # OS
 .DS_Store
