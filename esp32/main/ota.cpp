@@ -29,41 +29,8 @@ String download_path;
 String version;
 String signature;
 
-const char *rootCACertificate = R"string_literal(
------BEGIN CERTIFICATE-----
-MIIDZjCCAk6gAwIBAgIUDy8FdhB/F0fUxO/TJ+GcfIYE9IswDQYJKoZIhvcNAQEL
-BQAwXTELMAkGA1UEBhMCVFcxDzANBgNVBAgMBlRhaXdhbjEPMA0GA1UEBwwGVGFp
-cGVpMRQwEgYDVQQKDAtBbnRpZ3Jhdml0eTEWMBQGA1UEAwwNMTkyLjE2OC4xLjEw
-MDAeFw0yNjA2MjIwNTM4MzZaFw0zNjA2MTkwNTM4MzZaMF0xCzAJBgNVBAYTAlRX
-MQ8wDQYDVQQIDAZUYWl3YW4xDzANBgNVBAcMBlRhaXBlaTEUMBIGA1UECgwLQW50
-aWdyYXZpdHkxFjAUBgNVBAMMDTE5Mi4xNjguMS4xMDAwggEiMA0GCSqGSIb3DQEB
-AQUAA4IBDwAwggEKAoIBAQC9M1Mqh8PfJz0uFRSR2Qczn8tfUKuCvu4Y2MoZV2r9
-aya/xkyLRhAMHUv8eo+lMFo0Un2lv6U68S/A1hrWSURvEEqYRD2JMYEN7lCviZJY
-8ZHzmOVB+/hlzaohETLJwS0NfvQBj/n9BLVRnha1Fg2SmAIgizkCOw9Kownrd3vo
-64Zqhlzf2FHsPKqB3CbxJhkPL1ZkEBRPh8GlLcNmssmAi0PvGPXnZx9yp3YuJ0d5
-esC5uF9ZaxQYZhr0guoJY5SioRG1XiMwWWWtuVw+IMCI1H9GLiHBjSKI+ra4N60w
-w7kfcV67te96cQhT/d04IgGMeLodbX424fjhM98KSCPPAgMBAAGjHjAcMBoGA1Ud
-EQQTMBGCCWxvY2FsaG9zdIcEfwAAATANBgkqhkiG9w0BAQsFAAOCAQEAJj6hu5Q/
-w1rj16hPrMnS2Wy+47p5V81hP/SRC7xmcnncnN4lObOcjjNaUBlhDnbLC4V5Tyuz
-/W3Ekgy7xW+PxDrx06rZfmzlDBVqrMrulHjyymiDEp709EZuP1cp5cOL4HktPMeU
-Myq53CBFQ284EJXFRERRtSa1DewMFrbxXW+weNuLzDFHqQHAf+8RpENsI0qec39l
-msdhMStIAeWrI49Fk2+s4gq8G2Cx9fhKZxBjL7eSY4farvCvNskMPvIxTnIzb0P7
-eGvhBmiBS5VnadB2iOHxVo4dqN7IbL+VgC+2eB/o2OlzRrAi/mW+l9WOhaJoaoBq
-sfAJn78F4QnwNg==
------END CERTIFICATE-----
-)string_literal";
-
-const char *rsaPublicKey = R"string_literal(
------BEGIN PUBLIC KEY-----
-MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA3AaOSEuE/WTWyGD0GRva
-TK3rFFJTZcnvb4QEEnCQ6bDfK56/1znxzUQ65S08/3hnblDcmalgNkFALl/Euvkb
-0+DfbE99UMjaPh9YOyJt+3Ju3I4mI2uA8cGYj4NKJyjDbjhrVnB94ahkVL1+QytZ
-Fdd8buzjjFAtSXaoWTMSWgVroS3GepArxhCCeXLJNdPKbXFMiX1LKZ8jB83Er1YX
-wdaqZgbGTPRNFzGe1/008QAzxI28/euA826O739zqs8PZ12OxNiIEe8NknL9TrTb
-gDuKPIg5whrPFN0FCFSxJZp6mt0DZhpTAEecpHiL56DPGlrD4x2clhExCVUPlP6D
-PwIDAQAB
------END PUBLIC KEY-----
-)string_literal";
+String rootCACertificate;
+String rsaPublicKey;
 
 // ================= internal func =================
 
@@ -110,8 +77,8 @@ bool verifyManifestSignature(String manifest, String b64Signature) {
   mbedtls_pk_init(&pk);
 
   // load public key
-  if (mbedtls_pk_parse_public_key(&pk, (const unsigned char *)rsaPublicKey,
-                                  strlen(rsaPublicKey) + 1) != 0) {
+  if (mbedtls_pk_parse_public_key(&pk, (const unsigned char *)rsaPublicKey.c_str(),
+                                  rsaPublicKey.length() + 1) != 0) {
     Serial.println("Public key parsing failed!");
     return false;
   }
@@ -150,7 +117,7 @@ bool verifyManifestSignature(String manifest, String b64Signature) {
 void setClient() {
   client = new NetworkClientSecure();
   // client = new NetworkClient();
-  client->setCACert(rootCACertificate);
+  client->setCACert(rootCACertificate.c_str());
 }
 
 // Delete the network client and free resources
@@ -239,6 +206,13 @@ bool loadConfig(String &ssid, String &password, String &identity, String &userna
   username = doc["eap_username"].as<String>();
   useEnterprise = doc["use_enterprise"].as<bool>();
   serverUrl = doc["server_url"].as<String>();
+  rootCACertificate = doc["ca_cert"].as<String>();
+  rsaPublicKey = doc["public_key"].as<String>();
+
+  if (ssid.isEmpty() || serverUrl.isEmpty() || rootCACertificate.isEmpty() || rsaPublicKey.isEmpty()) {
+    Serial.println("Required config fields are missing or empty!");
+    return false;
+  }
 
   Serial.println("Config loaded successfully:");
   Serial.printf("SSID: %s\n", ssid.c_str());

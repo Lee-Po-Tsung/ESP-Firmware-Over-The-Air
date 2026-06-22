@@ -26,34 +26,10 @@ void setup() {
 
   // Load configs dynamically
   if (!loadConfig(wifi_ssid, wifi_password, eap_identity, eap_username, use_enterprise, server_url)) {
-    Serial.println("[Config] /config.json is missing or invalid!");
-    Serial.println("[Config] Please paste your config JSON (one line) over Serial within 15 seconds...");
-    uint32_t start_wait = millis();
-    String serial_input = "";
-    while (millis() - start_wait < 15000) {
-      if (Serial.available()) {
-        char c = Serial.read();
-        serial_input += c;
-        if (c == '\n') break;
-      }
-      delay(5);
+    Serial.println("[Config] Critical error: /config.json is missing or invalid! Halting...");
+    while (true) {
+      delay(1000);
     }
-    serial_input.trim();
-    if (serial_input.startsWith("{") && serial_input.endsWith("}")) {
-      File file = LittleFS.open("/config.json", "w");
-      if (file) {
-        file.print(serial_input);
-        file.close();
-        Serial.println("[Config] Configuration saved! Rebooting...");
-        delay(1000);
-        ESP.restart();
-      } else {
-        Serial.println("[Config] Failed to open /config.json for writing!");
-      }
-    }
-    Serial.println("[Config] No valid configuration received. Rebooting...");
-    delay(2000);
-    ESP.restart();
   }
 
   initOTA(server_url, check_path);
