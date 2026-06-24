@@ -1,8 +1,12 @@
 [setting]
 host = "0.0.0.0"
 ip = 8000
+admin_key = "super_secret_admin_key"
+
 [path]
 firmware = "./firmware"
 version_list = "./version.json"
 private_key = "./private_key.pem"
 public_key = "./public_key.pem"
+cert = "./cert.pem"
+key = "./key.pem"

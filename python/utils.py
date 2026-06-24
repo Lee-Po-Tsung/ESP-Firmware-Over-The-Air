@@ -1,10 +1,14 @@
 import hashlib
 import json
 import base64
+import datetime
 from flask import current_app
 from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.primitives.asymmetric import padding
-from cryptography.hazmat.primitives.serialization import load_pem_private_key
+from cryptography.hazmat.primitives.asymmetric import padding, rsa
+from cryptography.hazmat.primitives.serialization import load_pem_private_key, Encoding, PrivateFormat, NoEncryption
+from cryptography import x509
+from cryptography.x509.oid import NameOID
+
 
 
 def calculate_sha256(filepath):
@@ -44,3 +48,42 @@ def save_version_list(data):
 
 def compare_version(latest_v, current_v):
     return list(map(int, latest_v.split(".", 2))) > list(map(int, current_v.split(".", 2)))
+
+
+def generate_self_signed_cert(cert_path, key_path):
+    private_key = rsa.generate_private_key(
+        public_exponent=65537,
+        key_size=2048,
+    )
+    subject = issuer = x509.Name([
+        x509.NameAttribute(NameOID.COUNTRY_NAME, "TW"),
+        x509.NameAttribute(NameOID.STATE_OR_PROVINCE_NAME, "Taiwan"),
+        x509.NameAttribute(NameOID.LOCALITY_NAME, "Taipei"),
+        x509.NameAttribute(NameOID.ORGANIZATION_NAME, "Antigravity"),
+        x509.NameAttribute(NameOID.COMMON_NAME, "leepotsung.pythonanywhere.com"),
+    ])
+    cert = x509.CertificateBuilder().subject_name(
+        subject
+    ).issuer_name(
+        issuer
+    ).public_key(
+        private_key.public_key()
+    ).serial_number(
+        x509.random_serial_number()
+    ).not_valid_before(
+        datetime.datetime.now(datetime.timezone.utc)
+    ).not_valid_after(
+        datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=3650)
+    ).add_extension(
+        x509.SubjectAlternativeName([x509.DNSName("leepotsung.pythonanywhere.com")]),
+        critical=False,
+    ).sign(private_key, hashes.SHA256())
+
+    with open(cert_path, "wb") as f:
+        f.write(cert.public_bytes(Encoding.PEM))
+    with open(key_path, "wb") as f:
+        f.write(private_key.private_bytes(
+            encoding=Encoding.PEM,
+            format=PrivateFormat.TraditionalOpenSSL,
+            encryption_algorithm=NoEncryption()
+        ))
