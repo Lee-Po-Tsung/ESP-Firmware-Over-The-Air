@@ -2,6 +2,8 @@ import hashlib
 import json
 import base64
 import datetime
+import socket
+import ipaddress
 from flask import current_app
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import padding, rsa
@@ -62,6 +64,24 @@ def generate_self_signed_cert(cert_path, key_path):
         x509.NameAttribute(NameOID.ORGANIZATION_NAME, "Antigravity"),
         x509.NameAttribute(NameOID.COMMON_NAME, "leepotsung.pythonanywhere.com"),
     ])
+
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        s.connect(('8.8.8.8', 80))
+        local_ip = s.getsockname()[0]
+    except Exception:
+        local_ip = '127.0.0.1'
+    finally:
+        s.close()
+
+    san_list = [
+        x509.DNSName("leepotsung.pythonanywhere.com"),
+        x509.DNSName("localhost"),
+        x509.IPAddress(ipaddress.ip_address("127.0.0.1")),
+    ]
+    if local_ip != "127.0.0.1":
+        san_list.append(x509.IPAddress(ipaddress.ip_address(local_ip)))
+
     cert = x509.CertificateBuilder().subject_name(
         subject
     ).issuer_name(
@@ -75,7 +95,7 @@ def generate_self_signed_cert(cert_path, key_path):
     ).not_valid_after(
         datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=3650)
     ).add_extension(
-        x509.SubjectAlternativeName([x509.DNSName("leepotsung.pythonanywhere.com")]),
+        x509.SubjectAlternativeName(san_list),
         critical=False,
     ).sign(private_key, hashes.SHA256())
 

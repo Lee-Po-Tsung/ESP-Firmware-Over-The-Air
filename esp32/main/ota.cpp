@@ -15,7 +15,7 @@
 #include <mbedtls/sha256.h>
 
 // ================= global vars =================
-#define FIRMWARE_VERSION "1.2.5" // temp
+#define FIRMWARE_VERSION "2.1.0" // temp
 #define DEVICE_MODEL "ESP32"
 
 uint64_t chipid = ESP.getEfuseMac();

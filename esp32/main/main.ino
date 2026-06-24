@@ -1,6 +1,11 @@
 #include "LittleFSTest.h"
 #include "ota.h" // have funcs about ota
 #include <WiFi.h>
+#include <sys/time.h>
+
+#ifndef RGB_BUILTIN
+#define RGB_BUILTIN 48
+#endif
 
 // Dynamic Wi-Fi & Server config variables loaded from LittleFS config.json on boot
 String wifi_ssid;
@@ -15,6 +20,13 @@ const String check_path = "/api/check";
 void setup() {
   Serial.begin(115200);
   delay(5000);                  // I open monitor. see debug msg
+
+  // Set system time to June 24, 2026 for TLS certificate validation
+  struct timeval tv;
+  tv.tv_sec = 1782283800;
+  tv.tv_usec = 0;
+  settimeofday(&tv, NULL);
+
   pinMode(LED_BUILTIN, OUTPUT); // LED, for test ota
 
   // Initialize Filesystem first
@@ -79,7 +91,9 @@ void loop() {
     }
   }
 
-  delay(6000); // every 6s, check version (temp
-
-  // digitalWrite(LED_BUILTIN, LOW); // test code
+  Serial.println("Setting LED to Green");
+  neopixelWrite(RGB_BUILTIN, 0, 64, 0);
+  delay(6000); // check version every 6s
+  Serial.println("Turn off Blue");
+  neopixelWrite(RGB_BUILTIN, 0, 0, 64);
 }
