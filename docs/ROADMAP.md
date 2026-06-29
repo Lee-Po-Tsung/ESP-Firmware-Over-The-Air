@@ -45,7 +45,7 @@ us can clone the repo and run the app from a documented setup.
 
 ---
 
-## M1 — Core OTA Backend (port the proven logic)
+## M1 — Core OTA Backend (In Progress - Backend completed, client-side fixes and tests pending)
 
 **Title:** `M1 — Core OTA Backend`
 
@@ -84,19 +84,14 @@ beginner fills in concrete adapters from a template — given `StorageBackend`
 and `local_storage.py`, they write `s3_storage.py` the same way.
 
 **Tasks:**
-- Scaffold the `backend/` tree above; wire FastAPI with SQLAlchemy and Alembic
-- Port the existing RSA-PSS signing and `model|version|sha256` manifest logic
-  from the Flask code into `domain/signing.py`; keep it byte-for-byte compatible
-  so existing signatures still verify on-device
-- `Firmware` model and an upload endpoint, gated by the existing admin key for
-  now (real auth comes in M2)
-- Device endpoints `POST /api/check` and `GET /api/download/{id}` matching the
-  current ESP32 protocol exactly
-- Local-filesystem `StorageBackend`; firmware binaries on disk, metadata in SQLite
-- Fix the two known ESP32 issues while porting: replace the hardcoded system
-  time with SNTP, and align the version-compare logic between device and server
-- Write `CONTRIBUTING.md` as warm-up **(good first task)**
-- Add unit tests for the signing and version-compare logic **(good first task)**
+- [x] Scaffold the `backend/` tree above; wire FastAPI with SQLAlchemy and Alembic
+- [x] Port the existing RSA-PSS signing and `model|version|sha256` manifest logic from the Flask code into `domain/signing.py`; keep it byte-for-byte compatible so existing signatures still verify on-device
+- [x] Firmware model and an upload endpoint, gated by the existing admin key for now (real auth comes in M2)
+- [x] Device endpoints `POST /api/check` and `GET /api/download/{id}` matching the current ESP32 protocol exactly
+- [x] Local-filesystem `StorageBackend`; firmware binaries on disk, metadata in SQLite
+- [ ] Fix the two known ESP32 issues while porting: replace the hardcoded system time with SNTP, and align the version-compare logic between device and server
+- [ ] Write `CONTRIBUTING.md` as warm-up **(good first task)**
+- [ ] Add unit tests for the signing and version-compare logic **(good first task)**
 
 **Done when:** The existing ESP32 device can check, download, verify, and flash a
 firmware update served by the new FastAPI backend. Same behaviour as today, new
