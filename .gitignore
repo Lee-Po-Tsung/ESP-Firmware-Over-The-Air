@@ -26,6 +26,10 @@ esp32/test
 .pre-commit-config.yaml.bak
 .clang-format.bak
 config.json
+HANDOFF.md
+MILESTONES.md
+README.md
+ROADMAP.md
 
 # OS
 .DS_Store
