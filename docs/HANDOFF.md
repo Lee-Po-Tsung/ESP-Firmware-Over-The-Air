@@ -17,39 +17,24 @@ security-critical path, the beginner gets low-risk high-learning work.
 
 ## Current state of the repo
 
-A working Flask + ESP32 prototype already exists and does the hard part well.
-Do not throw it away; port its proven logic forward.
+The M1 backend migration has completed, transitioning the server to a FastAPI Clean Architecture setup located under `backend/`. The legacy Flask backend in `python/` has been removed. However, client-side tasks and testing are still in progress.
 
 What already works:
 
-- `python/` — Flask server. Firmware upload (admin-key gated), `/api/check` and
-  `/api/download` device endpoints, RSA-PSS signing of a `model|version|sha256`
-  manifest, HTTPS with a self-signed cert.
-- `esp32/main/` — device firmware. Downloads to LittleFS, verifies SHA-256 and
-  the RSA-PSS signature before flashing, downgrade protection, A/B partition
-  rollback via `esp_ota_mark_app_valid_cancel_rollback`, WPA2 Enterprise support,
-  config loaded from `config.json` on LittleFS.
+- `backend/` — FastAPI Clean Architecture server. Implements endpoints for firmware uploads (gated by admin key), device checking (`POST /api/check`), and downloading (`GET /api/download/{id}`). It supports RSA-PSS signing of `model|version|sha256` manifest.
+- `esp32/main/` — device firmware. Downloads to LittleFS, verifies SHA-256 and the RSA-PSS signature, downgrade protection, A/B partition rollback, WPA2 Enterprise support, and dynamic config loaded from LittleFS.
 
-Security design is the strong point: the version number is signed into the
-manifest, verification happens before flashing, TLS uses CA pinning. Keep this
-intact when porting.
+Issues resolved during the backend port:
 
-Known issues to fix during the port (M1):
+- Replaced `configs.toml` and hardcoded admin keys with environment variable settings in `backend/config.py`.
+- Replaced the vulnerable Flask Werkzeug debug server with a production-ready FastAPI setup.
 
-- `python/configs.toml` is committed with a real `admin_key`, and the same key
-  is printed in the README. Move it to `.env`, remove it from version control.
-- `python/server.py` runs with `debug=True` on `host=0.0.0.0`. That exposes the
-  Werkzeug debugger (remote code execution). Must be off; Flask's dev server is
-  not for production anyway.
-- `esp32/main/main.ino` hardcodes the system time (`tv.tv_sec = 1782283800`) to
-  pass TLS cert validity checks. Replace with SNTP.
-- Version compare is inconsistent: the server uses `split`, the device uses
-  `sscanf`. Also `FIRMWARE_VERSION` in `ota.cpp` (2.1.0) is ahead of the latest
-  in `version.json` (1.2.6). Align the logic and the version numbers.
-- The device sends a hardcoded `"ID":"ESP32"` and never sends its computed MAC,
-  so per-device tracking is impossible today. Address when device identity is
-  needed.
-- No tests anywhere.
+Remaining tasks to complete M1:
+
+- Replace the hardcoded system time on ESP32 in `esp32/main/main.ino` with dynamic SNTP.
+- Align the version-compare logic and version numbers between the device and server.
+- Add unit tests for the signing and version-compare logic.
+- Create `CONTRIBUTING.md`.
 
 ## Decisions made in planning
 
@@ -109,8 +94,7 @@ and `local_storage.py`, they write `s3_storage.py` the same way.
 ## Tooling decisions
 
 - Python env: `uv`, locked with `uv.lock`. Always use uv, never bare pip.
-- All three formatters for C/C++, Python & React, should run in pre-commit (local gate) and CI (PR gate).
-  Not yet created — this is the next task.
+- Formatters for C/C++ (`clang-format`) and Python (`black` and `ruff`) are configured to run in pre-commit hooks and GitHub Actions CI. Node.js formatting is deferred until M3 frontend work starts.
 
 ## Time estimate (part-time, with AI assistance)
 
