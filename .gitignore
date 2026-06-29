@@ -1,4 +1,5 @@
 # Python
+backend/data/
 __pycache__/
 *.py[cod]
 *$py.class
@@ -7,8 +8,6 @@ __pycache__/
 build/
 dist/
 *.egg-info/
-python/firmware
-python/*.json
 .vscode
 
 # Arduino / ESP32
@@ -26,6 +25,7 @@ esp32/test
 .pre-commit-config.yaml.bak
 .clang-format.bak
 config.json
+ntust_config.json
 
 # OS
 .DS_Store
