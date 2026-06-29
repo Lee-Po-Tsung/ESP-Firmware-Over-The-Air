@@ -1,6 +1,6 @@
 # ESP-Firmware-Over-The-Air
 
-ESP32 automatic firmware update with a secure HTTPS Flask server hosting the firmware files.
+ESP32 automatic firmware update with a secure FastAPI Clean Architecture server hosting the firmware files.
 
 ## Server-Side Setup
 
@@ -8,18 +8,18 @@ ESP32 automatic firmware update with a secure HTTPS Flask server hosting the fir
   ```bash
   uv sync
   ```
-- Generate RSA key pairs for firmware signature signing:
+- Generate the signing key pair:
   ```bash
-  cd python
-  openssl genrsa -out private_key.pem 2048
-  openssl rsa -pubout -in private_key.pem -out public_key.pem
-  cd ..
+  uv run python backend/scripts/generate_keys.py
   ```
-- Start the server once to automatically generate the self-signed SSL/TLS certificates:
+- Create the database schema:
   ```bash
-  uv run server.py
+  uv run alembic -c backend/alembic.ini upgrade head
   ```
-  Terminate the server after certificates are created.
+- Start the server:
+  ```bash
+  uv run uvicorn main:app --app-dir backend --reload
+  ```
 
 ## Client-Side ESP32 Configuration
 
@@ -31,7 +31,7 @@ ESP32 automatic firmware update with a secure HTTPS Flask server hosting the fir
     "use_enterprise": false,
     "eap_identity": "",
     "eap_username": "",
-    "server_url": "https://YOUR_SERVER_IP:8000",
+    "server_url": "http://YOUR_SERVER_IP:8000",
     "ca_cert": "-----BEGIN CERTIFICATE-----\nYOUR_CERT_PEM_CONTENT\n-----END CERTIFICATE-----\n",
     "public_key": "-----BEGIN PUBLIC KEY-----\nYOUR_PUBLIC_KEY_PEM_CONTENT\n-----END PUBLIC KEY-----\n"
   }
@@ -53,14 +53,10 @@ ESP32 automatic firmware update with a secure HTTPS Flask server hosting the fir
   ```bash
   arduino-cli compile --fqbn esp32:esp32:esp32s3 --board-options "PartitionScheme=custom,CDCOnBoot=cdc" --output-dir build_out esp32/main
   ```
-- Start the Flask server:
-  ```bash
-  uv run server.py
-  ```
-- Upload the binary to the server using the admin key defined in `configs.toml`:
+- Upload the binary to the server using the web interface at `http://YOUR_SERVER_IP:8000/firmware`, or programmatically:
   ```python
   import requests
   files = {'firmware': ('main.ino.bin', open('build_out/main.ino.bin', 'rb'))}
   data = {'model': 'ESP32', 'version': '1.2.6', 'admin_key': 'super_secret_admin_key'}
-  requests.post('https://YOUR_SERVER_IP:8000/firmware/upload', files=files, data=data, verify=False)
+  requests.post('http://YOUR_SERVER_IP:8000/firmware/upload', files=files, data=data)
   ```
