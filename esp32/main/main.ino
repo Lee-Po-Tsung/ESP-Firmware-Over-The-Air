@@ -65,7 +65,11 @@ void setup() {
 }
 
 void loop() {
-    // digitalWrite(LED_BUILTIN, HIGH); // test code
+    // Show this build's colour first, so it is visible before any OTA kicks in.
+    // v1.0.0 = green, v1.0.1 = red. This line is the only per-version difference.
+    Serial.println("LED: GREEN (running v1.0.0)");
+    neopixelWrite(RGB_BUILTIN, 0, 64, 0);
+    delay(6000);  // hold the colour, then re-check for an update
 
     // if wifi connected then check the latest firmware
     if (WiFi.status() == WL_CONNECTED) {
@@ -78,7 +82,7 @@ void loop() {
                     ESP.restart();
                 }
             }
-            OTA();
+            OTA();  // verifies the signature, flashes, and reboots into the new build
         }
     } else {
         // if cannot reconnect then restart esp32
@@ -92,10 +96,4 @@ void loop() {
             ESP.restart();
         }
     }
-
-    Serial.println("Setting LED to Green");
-    neopixelWrite(RGB_BUILTIN, 0, 64, 0);
-    delay(6000);  // check version every 6s
-    Serial.println("Turn off Blue");
-    neopixelWrite(RGB_BUILTIN, 0, 0, 64);
 }
