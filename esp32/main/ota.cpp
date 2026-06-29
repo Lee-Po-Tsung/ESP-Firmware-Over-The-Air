@@ -16,7 +16,7 @@
 #include <mbedtls/sha256.h>
 
 // ================= global vars =================
-#define FIRMWARE_VERSION "2.1.0"  // temp
+#define FIRMWARE_VERSION "1.0.0"  // v1 (green); v2 build bumps this to 1.0.1 (red)
 #define DEVICE_MODEL "ESP32"
 
 uint64_t chipid = ESP.getEfuseMac();
@@ -149,6 +149,12 @@ bool initWiFi(const String& ssid, const String& password) {
         return false;
     }
     Serial.println("\nWiFi connected");
+    Serial.print("IP: ");
+    Serial.println(WiFi.localIP());
+    Serial.print("Gateway: ");
+    Serial.println(WiFi.gatewayIP());
+    Serial.print("RSSI: ");
+    Serial.println(WiFi.RSSI());
     return true;
 }
 
