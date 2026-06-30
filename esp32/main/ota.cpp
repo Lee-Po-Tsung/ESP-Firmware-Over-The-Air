@@ -19,11 +19,7 @@
 #define FIRMWARE_VERSION "1.0.0"  // v1 (green); v2 build bumps this to 1.0.1 (red)
 #define DEVICE_MODEL "ESP32"
 
-uint64_t chipid = ESP.getEfuseMac();
-String device_id = WiFi.macAddress();
-
 NetworkClientSecure* client = nullptr;
-// NetworkClient* client = nullptr;
 String server_url;
 String check_path;
 String download_path;
@@ -281,12 +277,18 @@ bool check() {
     Serial.println("Current version: " + String(FIRMWARE_VERSION));
     if (client == nullptr) setClient();
 
+    JsonDocument req;
+    req["device_id"] = WiFi.macAddress();
+    req["model"] = DEVICE_MODEL;
+    req["version"] = FIRMWARE_VERSION;
+    String data;
+    serializeJson(req, data);
+    Serial.println("Check request: " + data);
+
     HTTPClient https;
-    String url = server_url + check_path;
-    https.begin(*client, url);
+    https.begin(*client, server_url + check_path);
     https.addHeader("Content-Type", "application/json");
-    String data = "{\"ID\":\"ESP32\", \"version\":\"" + String(FIRMWARE_VERSION) + "\"}";
-    Serial.println(data);
+
     int code = https.POST(data);
     if (code != HTTP_CODE_OK) {
         Serial.println("http connect error: " + String(code));
@@ -296,20 +298,19 @@ bool check() {
     }
 
     String res = https.getString();
-    JsonDocument doc;
+    https.end();
 
+    JsonDocument doc;
     DeserializationError err = deserializeJson(doc, res);
     if (err) {
         Serial.print("json deserialize error: ");
         Serial.println(err.c_str());
-        https.end();
         delClient();
         return false;
     }
 
     if (doc["update_available"] != true) {
         Serial.println("no new version");
-        https.end();
         delClient();
         return false;
     }
@@ -317,8 +318,6 @@ bool check() {
     version = doc["version"].as<String>();
     signature = doc["signature"].as<String>();
     download_path = doc["download_url"].as<String>();
-
-    https.end();
     return true;
 }
 
