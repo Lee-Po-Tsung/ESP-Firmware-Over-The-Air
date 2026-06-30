@@ -179,7 +179,9 @@ bool initOTA(const String& serverUrl, const String& checkPath) {
 
 // Connect to the specified WiFi network
 bool initWiFi(const String& ssid, const String& password) {
+    WiFi.disconnect(true);
     WiFi.mode(WIFI_STA);
+
     WiFi.begin(ssid, password);
 
     int count = 0;
@@ -223,6 +225,12 @@ bool initWiFiEnterprise(const String& ssid, const String& identity, const String
         return false;
     }
     Serial.println("\nWiFi Enterprise connected");
+    Serial.print("IP: ");
+    Serial.println(WiFi.localIP());
+    Serial.print("Gateway: ");
+    Serial.println(WiFi.gatewayIP());
+    Serial.print("RSSI: ");
+    Serial.println(WiFi.RSSI());
     return true;
 }
 
