@@ -110,7 +110,7 @@ String calculateFileSHA256(const char* path) {
 }
 
 // Verify the RSA-PSS digital signature using the public key and manifest
-bool verifyManifestSignature(String manifest, String b64Signature) {
+bool verifyManifestSignature(const String& manifest, const String& b64Signature) {
     // Init public key container
     mbedtls_pk_context pk;
     mbedtls_pk_init(&pk);
@@ -119,14 +119,27 @@ bool verifyManifestSignature(String manifest, String b64Signature) {
     if (mbedtls_pk_parse_public_key(&pk, (const unsigned char*)rsaPublicKey.c_str(),
                                     rsaPublicKey.length() + 1) != 0) {
         Serial.println("Public key parsing failed!");
+        mbedtls_pk_free(&pk);
         return false;
     }
 
     // Base64 signature to string
     unsigned char sig[256];
     size_t sig_len = 0;
-    mbedtls_base64_decode(sig, sizeof(sig), &sig_len, (const unsigned char*)b64Signature.c_str(),
-                          b64Signature.length());
+    int ret =
+        mbedtls_base64_decode(sig, sizeof(sig), &sig_len,
+                              (const unsigned char*)b64Signature.c_str(), b64Signature.length());
+    if (ret != 0) {
+        if (ret == MBEDTLS_ERR_BASE64_BUFFER_TOO_SMALL) {
+            Serial.printf("Base64 decode failed: buffer too small, need %u bytes\n", sig_len);
+        } else if (ret == MBEDTLS_ERR_BASE64_INVALID_CHARACTER) {
+            Serial.println("Base64 decode failed: invalid character in signature");
+        } else {
+            Serial.printf("Base64 decode failed: error %d\n", ret);
+        }
+        mbedtls_pk_free(&pk);
+        return false;
+    }
 
     // Compute manifest string sha256
     unsigned char hash[32];
