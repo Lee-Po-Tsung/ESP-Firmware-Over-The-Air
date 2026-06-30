@@ -339,10 +339,14 @@ bool downloadFirmwareToFS() {
         https.end();
         return false;
     }
-    https.writeToStream(&file);
+    int written = https.writeToStream(&file);
     file.close();
-
     https.end();
+    if (written < 0) {
+        Serial.printf("Firmware download failed: writeToStream error %d\n", written);
+        delClient();
+        return false;
+    }
     delClient();
     return true;
 }
