@@ -9,13 +9,13 @@
 #include <WiFi.h>
 #include <esp_ota_ops.h>
 
-// rsa and sha256 ...
+// For RSA and SHA-256
+// Docs: https://sourcevu.sysprogs.com/rp2040/lib/mbedtls/
 #include <mbedtls/base64.h>
 #include <mbedtls/md.h>
 #include <mbedtls/pk.h>
 #include <mbedtls/sha256.h>
 
-// ================= global vars =================
 #define FIRMWARE_VERSION "1.0.0"  // v1 (green); v2 build bumps this to 1.0.1 (red)
 #define DEVICE_MODEL "ESP32"
 
@@ -33,8 +33,6 @@ String signature;
 String rootCACertificate;
 String rsaPublicKey;
 
-// ================= internal func =================
-
 // Calculate and print the update progress percentage
 void printProgress(size_t progress, size_t total) {
     float percentage = (progress / (float)total) * 100;
@@ -45,12 +43,15 @@ void printProgress(size_t progress, size_t total) {
 String calculateFileSHA256(const char* path) {
     File file = LittleFS.open(path, "r");
     if (!file) return "";
-    Serial.println("load file and calculate sha256");
+    Serial.println("Load file and calculate sha256");
 
+    // Init SHA-256 env
     mbedtls_sha256_context ctx;
     mbedtls_sha256_init(&ctx);
-    mbedtls_sha256_starts(&ctx, 0);  // 0: SHA-256
+    mbedtls_sha256_starts(&ctx, 0);  // 0 for SHA-256, 1 for SHA-224
 
+    // Read the file content in chunks and update the hash,
+    // with a maximum of 1024 bytes each time
     uint8_t buf[1024];
     while (file.available()) {
         size_t len = file.read(buf, sizeof(buf));
@@ -58,6 +59,7 @@ String calculateFileSHA256(const char* path) {
     }
     file.close();
 
+    // Free resources and get the final 32-byte hash.
     uint8_t hash[32];
     mbedtls_sha256_finish(&ctx, hash);
     mbedtls_sha256_free(&ctx);
@@ -73,10 +75,11 @@ String calculateFileSHA256(const char* path) {
 
 // Verify the RSA-PSS digital signature using the public key and manifest
 bool verifyManifestSignature(String manifest, String b64Signature) {
+    // Init public key container
     mbedtls_pk_context pk;
     mbedtls_pk_init(&pk);
 
-    // load public key
+    // Load public key
     if (mbedtls_pk_parse_public_key(&pk, (const unsigned char*)rsaPublicKey.c_str(),
                                     rsaPublicKey.length() + 1) != 0) {
         Serial.println("Public key parsing failed!");
@@ -89,7 +92,7 @@ bool verifyManifestSignature(String manifest, String b64Signature) {
     mbedtls_base64_decode(sig, sizeof(sig), &sig_len, (const unsigned char*)b64Signature.c_str(),
                           b64Signature.length());
 
-    // compute manifest string sha256
+    // Compute manifest string sha256
     unsigned char hash[32];
     mbedtls_md_context_t md_ctx;
     mbedtls_md_init(&md_ctx);
@@ -99,12 +102,12 @@ bool verifyManifestSignature(String manifest, String b64Signature) {
     mbedtls_md_finish(&md_ctx, hash);
     mbedtls_md_free(&md_ctx);
 
-    // using padding.PSS mod
+    // Using padding.PSS mod
     mbedtls_rsa_context* rsa = mbedtls_pk_rsa(pk);
     mbedtls_rsa_set_padding(rsa, MBEDTLS_RSA_PKCS_V21, MBEDTLS_MD_SHA256);
 
-    // verify signature
-    int ret = mbedtls_pk_verify(&pk, MBEDTLS_MD_SHA256, hash, sizeof(hash), sig, sig_len);
+    // Verify signature
+    ret = mbedtls_pk_verify(&pk, MBEDTLS_MD_SHA256, hash, sizeof(hash), sig, sig_len);
     mbedtls_pk_free(&pk);
 
     return (ret == 0);
@@ -113,7 +116,6 @@ bool verifyManifestSignature(String manifest, String b64Signature) {
 // Initialize and configure the secure network client
 void setClient() {
     client = new NetworkClientSecure();
-    // client = new NetworkClient();
     client->setCACert(rootCACertificate.c_str());
 }
 
@@ -122,8 +124,6 @@ void delClient() {
     delete client;
     client = nullptr;
 }
-
-// ================= external func =================
 
 // Initialize OTA parameters with server URL and check path
 bool initOTA(const String& serverUrl, const String& checkPath) {
@@ -229,7 +229,7 @@ bool loadConfig(String& ssid, String& password, String& identity, String& userna
 
 // Check the server for an available firmware update
 bool check() {
-    Serial.println(FIRMWARE_VERSION);
+    Serial.println("Current version: " + String(FIRMWARE_VERSION));
     if (client == nullptr) setClient();
 
     HTTPClient https;
@@ -327,11 +327,11 @@ void OTA() {
     String fileSha256 = calculateFileSHA256("/firmware.bin");
     Serial.println("SHA-256: " + fileSha256);
 
-    // Manifest String (same as server)
+    // Manifest String
     String manifest = String(DEVICE_MODEL) + "|" + version + "|" + fileSha256;
-    Serial.println(manifest);
+    Serial.println("Firmware metadata:" + manifest);
 
-    // compare RSA signature
+    // Compare RSA signature
     if (verifyManifestSignature(manifest, signature)) {
         Serial.println("Digital signature verification passed.");
     } else {
@@ -349,7 +349,7 @@ void OTA() {
         return;
     }
 
-    // --- writing ---
+    // Writing firmware
     Serial.println("Writing to system partition...");
     File updateBin = LittleFS.open("/firmware.bin", "r");
     size_t updateSize = updateBin.size();
@@ -370,7 +370,7 @@ void OTA() {
             Serial.printf("Error: Write failed: %s\n", Update.errorString());
         }
     } else {
-        Serial.println("Not enough space");
+        Serial.println("Not enough space to begin update");
     }
     updateBin.close();
 }
