@@ -37,10 +37,14 @@ From the repo root:
 ```bash
 uv sync
 
-# 1. Generate the firmware-signing key pair (backend/keys/)
+# Generate the firmware-signing key pair (backend/keys/)
 uv run python backend/scripts/generate_keys.py
 
-# 2. Create the database schema
+# Generate a self-signed TLS cert for your LAN IP (backend/keys/).
+# The device pins this cert as its CA, so the IP must match server_url.
+uv run python backend/scripts/generate_tls_cert.py <your-lan-ip>
+
+# Create the database schema
 uv run alembic -c backend/alembic.ini upgrade head
 ```
 
@@ -53,8 +57,14 @@ under `backend/keys/`. Both are git-ignored.
 ## Run
 
 ```bash
-uv run uvicorn main:app --app-dir backend --reload
+uv run uvicorn main:app --app-dir backend --host 0.0.0.0 --reload \
+  --ssl-keyfile backend/keys/tls_key.pem \
+  --ssl-certfile backend/keys/tls_cert.pem
 ```
+
+`--host 0.0.0.0` makes the server reachable from the device over the LAN; the
+default `127.0.0.1` only accepts local connections. The device dials the
+`https://` URL in its `config.json`, so the SSL flags are required.
 
 Endpoints:
 
@@ -84,6 +94,7 @@ the embedded public key.
 - ESP32-side M1 items (SNTP clock, device/server version-compare alignment) are
   not part of this change — backend only.
 - Real auth (replacing the shared admin key) lands in M2.
-- TLS is not wired up here; run over plain HTTP locally. Automatic TLS arrives
-  at M5 (Caddy).
+- Local dev serves HTTPS with the self-signed cert from `generate_tls_cert.py`
+  (the device pins it as its CA). Production TLS via a reverse proxy with
+  automatic certificates (Caddy) arrives at M5.
 ```
