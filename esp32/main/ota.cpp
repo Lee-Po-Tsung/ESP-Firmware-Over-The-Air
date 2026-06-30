@@ -377,6 +377,11 @@ void markFirmwareValid() {
 // Execute the OTA update process, including verification and flashing
 void OTA() {
     String fileSha256 = calculateFileSHA256("/firmware.bin");
+    if (fileSha256.isEmpty()) {
+        Serial.println("Error: Failed to open /firmware.bin for hashing.");
+        LittleFS.remove("/firmware.bin");
+        return;
+    }
     Serial.println("SHA-256: " + fileSha256);
 
     // Manifest String
@@ -404,25 +409,35 @@ void OTA() {
     // Writing firmware
     Serial.println("Writing to system partition...");
     File updateBin = LittleFS.open("/firmware.bin", "r");
+    if (!updateBin) {
+        Serial.println("Error: Failed to open /firmware.bin for flashing.");
+        return;
+    }
     size_t updateSize = updateBin.size();
 
     if (Update.begin(updateSize)) {
-        Update.writeStream(updateBin);
+        size_t written = Update.writeStream(updateBin);
+
         if (Update.end()) {
-            if (Update.isFinished()) {
-                Serial.println("restart esp32...");
+            if (Update.isFinished() && !Update.hasError()) {
+                Serial.printf("Update Success! Written: %u bytes\n", written);
                 updateBin.close();
-                LittleFS.remove("/firmware.bin");  // clean
+                LittleFS.remove("/firmware.bin");
                 delay(2000);
                 ESP.restart();
             } else {
-                Serial.println("err");
+                Serial.printf("Update finished but has errors: %u\n", Update.getError());
+                Serial.printf("Progress: %u / %u\n", Update.progress(), Update.size());
+                updateBin.close();
+                LittleFS.remove("/firmware.bin");
             }
         } else {
-            Serial.printf("Error: Write failed: %s\n", Update.errorString());
+            Serial.printf("Update.end() failed: %s\n", Update.errorString());
+            updateBin.close();
+            LittleFS.remove("/firmware.bin");
         }
     } else {
         Serial.println("Not enough space to begin update");
+        updateBin.close();
     }
-    updateBin.close();
 }
