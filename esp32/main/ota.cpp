@@ -19,11 +19,7 @@
 #define FIRMWARE_VERSION "1.0.0"  // v1 (green); v2 build bumps this to 1.0.1 (red)
 #define DEVICE_MODEL "ESP32"
 
-uint64_t chipid = ESP.getEfuseMac();
-String device_id = WiFi.macAddress();
-
 NetworkClientSecure* client = nullptr;
-// NetworkClient* client = nullptr;
 String server_url;
 String check_path;
 String download_path;
@@ -33,10 +29,46 @@ String signature;
 String rootCACertificate;
 String rsaPublicKey;
 
-// Calculate and print the update progress percentage
-void printProgress(size_t progress, size_t total) {
-    float percentage = (progress / (float)total) * 100;
-    Serial.printf("Update progress: %.2f%%\n", percentage);
+// Initialize and mount LittleFS
+bool initFS() {
+    if (!LittleFS.begin(true)) {
+        Serial.println("LittleFS mount failed!");
+        return false;
+    }
+    Serial.println("LittleFS mounted successfully!");
+    return true;
+}
+
+// List all files and directories in a given path
+void listDir(fs::FS& fs, const char* dirname, uint8_t levels) {
+    Serial.printf("Listing directory: %s\r\n", dirname);
+
+    File root = fs.open(dirname);
+    if (!root) {
+        Serial.println("- failed to open directory");
+        return;
+    }
+    if (!root.isDirectory()) {
+        Serial.println(" - not a directory");
+        return;
+    }
+
+    File file = root.openNextFile();
+    while (file) {
+        if (file.isDirectory()) {
+            Serial.print("  DIR : ");
+            Serial.println(file.name());
+            if (levels) {
+                listDir(fs, file.path(), levels - 1);
+            }
+        } else {
+            Serial.print("  FILE: ");
+            Serial.print(file.name());
+            Serial.print("\tSIZE: ");
+            Serial.println(file.size());
+        }
+        file = root.openNextFile();
+    }
 }
 
 // Calculate the SHA-256 hash of a file stored in LittleFS
@@ -74,7 +106,7 @@ String calculateFileSHA256(const char* path) {
 }
 
 // Verify the RSA-PSS digital signature using the public key and manifest
-bool verifyManifestSignature(String manifest, String b64Signature) {
+bool verifyManifestSignature(const String& manifest, const String& b64Signature) {
     // Init public key container
     mbedtls_pk_context pk;
     mbedtls_pk_init(&pk);
@@ -83,14 +115,27 @@ bool verifyManifestSignature(String manifest, String b64Signature) {
     if (mbedtls_pk_parse_public_key(&pk, (const unsigned char*)rsaPublicKey.c_str(),
                                     rsaPublicKey.length() + 1) != 0) {
         Serial.println("Public key parsing failed!");
+        mbedtls_pk_free(&pk);
         return false;
     }
 
     // Base64 signature to string
     unsigned char sig[256];
     size_t sig_len = 0;
-    mbedtls_base64_decode(sig, sizeof(sig), &sig_len, (const unsigned char*)b64Signature.c_str(),
-                          b64Signature.length());
+    int ret =
+        mbedtls_base64_decode(sig, sizeof(sig), &sig_len,
+                              (const unsigned char*)b64Signature.c_str(), b64Signature.length());
+    if (ret != 0) {
+        if (ret == MBEDTLS_ERR_BASE64_BUFFER_TOO_SMALL) {
+            Serial.printf("Base64 decode failed: buffer too small, need %u bytes\n", sig_len);
+        } else if (ret == MBEDTLS_ERR_BASE64_INVALID_CHARACTER) {
+            Serial.println("Base64 decode failed: invalid character in signature");
+        } else {
+            Serial.printf("Base64 decode failed: error %d\n", ret);
+        }
+        mbedtls_pk_free(&pk);
+        return false;
+    }
 
     // Compute manifest string sha256
     unsigned char hash[32];
@@ -134,7 +179,9 @@ bool initOTA(const String& serverUrl, const String& checkPath) {
 
 // Connect to the specified WiFi network
 bool initWiFi(const String& ssid, const String& password) {
+    WiFi.disconnect(true);
     WiFi.mode(WIFI_STA);
+
     WiFi.begin(ssid, password);
 
     int count = 0;
@@ -178,6 +225,12 @@ bool initWiFiEnterprise(const String& ssid, const String& identity, const String
         return false;
     }
     Serial.println("\nWiFi Enterprise connected");
+    Serial.print("IP: ");
+    Serial.println(WiFi.localIP());
+    Serial.print("Gateway: ");
+    Serial.println(WiFi.gatewayIP());
+    Serial.print("RSSI: ");
+    Serial.println(WiFi.RSSI());
     return true;
 }
 
@@ -232,12 +285,18 @@ bool check() {
     Serial.println("Current version: " + String(FIRMWARE_VERSION));
     if (client == nullptr) setClient();
 
+    JsonDocument req;
+    req["device_id"] = WiFi.macAddress();
+    req["model"] = DEVICE_MODEL;
+    req["version"] = FIRMWARE_VERSION;
+    String data;
+    serializeJson(req, data);
+    Serial.println("Check request: " + data);
+
     HTTPClient https;
-    String url = server_url + check_path;
-    https.begin(*client, url);
+    https.begin(*client, server_url + check_path);
     https.addHeader("Content-Type", "application/json");
-    String data = "{\"ID\":\"ESP32\", \"version\":\"" + String(FIRMWARE_VERSION) + "\"}";
-    Serial.println(data);
+
     int code = https.POST(data);
     if (code != HTTP_CODE_OK) {
         Serial.println("http connect error: " + String(code));
@@ -247,20 +306,19 @@ bool check() {
     }
 
     String res = https.getString();
-    JsonDocument doc;
+    https.end();
 
+    JsonDocument doc;
     DeserializationError err = deserializeJson(doc, res);
     if (err) {
         Serial.print("json deserialize error: ");
         Serial.println(err.c_str());
-        https.end();
         delClient();
         return false;
     }
 
     if (doc["update_available"] != true) {
         Serial.println("no new version");
-        https.end();
         delClient();
         return false;
     }
@@ -268,8 +326,6 @@ bool check() {
     version = doc["version"].as<String>();
     signature = doc["signature"].as<String>();
     download_path = doc["download_url"].as<String>();
-
-    https.end();
     return true;
 }
 
@@ -291,10 +347,14 @@ bool downloadFirmwareToFS() {
         https.end();
         return false;
     }
-    https.writeToStream(&file);
+    int written = https.writeToStream(&file);
     file.close();
-
     https.end();
+    if (written < 0) {
+        Serial.printf("Firmware download failed: writeToStream error %d\n", written);
+        delClient();
+        return false;
+    }
     delClient();
     return true;
 }
@@ -325,6 +385,11 @@ void markFirmwareValid() {
 // Execute the OTA update process, including verification and flashing
 void OTA() {
     String fileSha256 = calculateFileSHA256("/firmware.bin");
+    if (fileSha256.isEmpty()) {
+        Serial.println("Error: Failed to open /firmware.bin for hashing.");
+        LittleFS.remove("/firmware.bin");
+        return;
+    }
     Serial.println("SHA-256: " + fileSha256);
 
     // Manifest String
@@ -352,25 +417,35 @@ void OTA() {
     // Writing firmware
     Serial.println("Writing to system partition...");
     File updateBin = LittleFS.open("/firmware.bin", "r");
+    if (!updateBin) {
+        Serial.println("Error: Failed to open /firmware.bin for flashing.");
+        return;
+    }
     size_t updateSize = updateBin.size();
 
     if (Update.begin(updateSize)) {
-        Update.writeStream(updateBin);
+        size_t written = Update.writeStream(updateBin);
+
         if (Update.end()) {
-            if (Update.isFinished()) {
-                Serial.println("restart esp32...");
+            if (Update.isFinished() && !Update.hasError()) {
+                Serial.printf("Update Success! Written: %u bytes\n", written);
                 updateBin.close();
-                LittleFS.remove("/firmware.bin");  // clean
+                LittleFS.remove("/firmware.bin");
                 delay(2000);
                 ESP.restart();
             } else {
-                Serial.println("err");
+                Serial.printf("Update finished but has errors: %u\n", Update.getError());
+                Serial.printf("Progress: %u / %u\n", Update.progress(), Update.size());
+                updateBin.close();
+                LittleFS.remove("/firmware.bin");
             }
         } else {
-            Serial.printf("Error: Write failed: %s\n", Update.errorString());
+            Serial.printf("Update.end() failed: %s\n", Update.errorString());
+            updateBin.close();
+            LittleFS.remove("/firmware.bin");
         }
     } else {
         Serial.println("Not enough space to begin update");
+        updateBin.close();
     }
-    updateBin.close();
 }

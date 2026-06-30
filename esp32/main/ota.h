@@ -1,5 +1,9 @@
 #pragma once
 #include <Arduino.h>
+#include <LittleFS.h>
+
+bool initFS();
+void listDir(fs::FS& fs, const char* dirname, uint8_t levels);
 
 bool initOTA(const String&, const String&);
 bool initWiFi(const String&, const String&);

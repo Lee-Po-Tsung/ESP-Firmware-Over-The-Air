@@ -40,9 +40,9 @@ Device protocol
 
 
 class CheckRequest(BaseModel):
-    # "ID" carries the device *model*, matching the on-device payload verbatim.
-    ID: str
+    model: str
     version: str
+    device_id: str | None = None
 
 
 @router.post("/api/check")
@@ -51,7 +51,7 @@ def check_update(
     use_case: CheckUpdate = Depends(get_check_update),
 ) -> dict:
     try:
-        result = use_case.execute(body.ID, body.version)
+        result = use_case.execute(body.model, body.version)
     except ModelNotFound as exc:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN) from exc
 
@@ -60,7 +60,6 @@ def check_update(
 
     return {
         "update_available": True,
-        "ID": result.model,
         "version": result.version,
         "signature": result.signature,
         "download_url": result.download_url,
