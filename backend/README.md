@@ -58,7 +58,7 @@ uv run uvicorn main:app --app-dir backend --reload
 
 Endpoints:
 
-- `POST /api/check` — body `{"ID": "<model>", "version": "<x.y.z>"}` (device protocol)
+- `POST /api/check` — body `{"device_id": "<mac>", "model": "<model>", "version": "<x.y.z>"}` (device protocol)
 - `GET  /api/download/{id}` — firmware binary
 - `GET  /firmware` — web page: firmware list + admin-key upload form
 - `GET  /docs` — OpenAPI UI
