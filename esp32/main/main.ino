@@ -1,7 +1,6 @@
 #include <WiFi.h>
 #include <sys/time.h>
 
-#include "LittleFSTest.h"
 #include "ota.h"
 
 #ifndef RGB_BUILTIN

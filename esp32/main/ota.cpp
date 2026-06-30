@@ -33,10 +33,46 @@ String signature;
 String rootCACertificate;
 String rsaPublicKey;
 
-// Calculate and print the update progress percentage
-void printProgress(size_t progress, size_t total) {
-    float percentage = (progress / (float)total) * 100;
-    Serial.printf("Update progress: %.2f%%\n", percentage);
+// Initialize and mount LittleFS
+bool initFS() {
+    if (!LittleFS.begin(true)) {
+        Serial.println("LittleFS mount failed!");
+        return false;
+    }
+    Serial.println("LittleFS mounted successfully!");
+    return true;
+}
+
+// List all files and directories in a given path
+void listDir(fs::FS& fs, const char* dirname, uint8_t levels) {
+    Serial.printf("Listing directory: %s\r\n", dirname);
+
+    File root = fs.open(dirname);
+    if (!root) {
+        Serial.println("- failed to open directory");
+        return;
+    }
+    if (!root.isDirectory()) {
+        Serial.println(" - not a directory");
+        return;
+    }
+
+    File file = root.openNextFile();
+    while (file) {
+        if (file.isDirectory()) {
+            Serial.print("  DIR : ");
+            Serial.println(file.name());
+            if (levels) {
+                listDir(fs, file.path(), levels - 1);
+            }
+        } else {
+            Serial.print("  FILE: ");
+            Serial.print(file.name());
+            Serial.print("\tSIZE: ");
+            Serial.println(file.size());
+        }
+        file = root.openNextFile();
+    }
 }
 
 // Calculate the SHA-256 hash of a file stored in LittleFS
