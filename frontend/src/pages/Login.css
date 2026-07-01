@@ -1,0 +1,118 @@
+.login-page {
+  min-height: 100svh;
+  width: 100%;
+  display: grid;
+  place-items: center;
+  padding: 2rem;
+  box-sizing: border-box;
+  background:
+    radial-gradient(circle at 10% 10%, rgba(59, 130, 246, 0.12) 0, transparent 40%),
+    radial-gradient(circle at 90% 90%, rgba(16, 185, 129, 0.12) 0, transparent 35%),
+    linear-gradient(180deg, #f8fafc 0%, #eef2ff 100%);
+}
+
+.login-card {
+  width: min(460px, 100%);
+  background: #ffffff;
+  border: 1px solid #dbeafe;
+  border-radius: 16px;
+  box-shadow: 0 15px 40px rgba(30, 64, 175, 0.12);
+  padding: 2.25rem;
+  text-align: left;
+}
+
+.login-header h1 {
+  margin: 0;
+  font-size: 2.1rem;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  color: #0f172a;
+}
+
+.login-header p {
+  margin-top: 0.75rem;
+  color: #475569;
+  font-size: 1rem;
+}
+
+.login-actions {
+  margin-top: 1.75rem;
+  display: grid;
+  gap: 0.85rem;
+}
+
+.social-btn {
+  width: 100%;
+  border-radius: 10px;
+  border: 1px solid #cbd5e1;
+  padding: 0.9rem 1rem;
+  background: #f8fafc;
+  color: #0f172a;
+  font-size: 1rem;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.7rem;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.social-btn:hover {
+  transform: translateY(-1px);
+  border-color: #60a5fa;
+  box-shadow: 0 8px 20px rgba(59, 130, 246, 0.16);
+}
+
+.social-icon {
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 999px;
+  display: inline-grid;
+  place-items: center;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.google-btn .social-icon {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.github-btn .social-icon {
+  background: #e2e8f0;
+  color: #111827;
+}
+
+.login-note {
+  margin-top: 1rem;
+  color: #64748b;
+  font-size: 0.9rem;
+}
+
+.login-back-link {
+  display: inline-block;
+  margin-top: 1.4rem;
+  color: #1d4ed8;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.login-back-link:hover {
+  text-decoration: underline;
+}
+
+@media (max-width: 640px) {
+  .login-page {
+    padding: 1.25rem;
+  }
+
+  .login-card {
+    padding: 1.6rem;
+  }
+
+  .login-header h1 {
+    font-size: 1.75rem;
+  }
+}
