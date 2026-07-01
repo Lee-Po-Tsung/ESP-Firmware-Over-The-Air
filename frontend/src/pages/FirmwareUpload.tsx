@@ -1,22 +1,42 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { Link } from 'react-router';
 import './FirmwareUpload.css';
 
 export default function FirmwareUpload() {
-  const [model, setModel] = useState('');
-  const [version, setVersion] = useState('');
-  const [file, setFile] = useState<File | null>(null);
+  const formRef = useRef<HTMLFormElement>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files.length > 0) {
-      setFile(e.target.files[0]);
+  async function handleSubmit(event: React.SubmitEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    const form = formRef.current;
+    if (!form || !form.reportValidity()) {
+      return;
     }
-  };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    alert(`Mock Upload:\nModel: ${model}\nVersion: ${version}\nFile: ${file?.name}`);
-  };
+    setSubmitting(true);
+    setMessage(null);
+
+    try {
+      const res = await fetch('/api/firmware/upload', {
+        method: 'POST',
+        body: new FormData(form),
+      });
+
+      if (!res.ok && res.status !== 303) {
+        setMessage(`Upload failed (HTTP ${res.status})`);
+        return;
+      }
+
+      setMessage('Firmware uploaded successfully.');
+      form.reset();
+    } catch {
+      setMessage('Cannot reach backend. Please make sure API server is running on port 1234.');
+    } finally {
+      setSubmitting(false);
+    }
+  }
 
   return (
     <div className="upload-container">
@@ -36,44 +56,47 @@ export default function FirmwareUpload() {
       </div>
 
       <div className="upload-card">
-        <form onSubmit={handleSubmit}>
+        <form ref={formRef} onSubmit={handleSubmit}>
           <div className="form-group">
-            <label>Device Model</label>
-            <input
-              type="text"
-              placeholder="hint"
-              value={model}
-              onChange={(e) => setModel(e.target.value)}
-              required
-            />
+            <label>
+              Device Model
+              <input type="text" name="model" placeholder="hint" required />
+            </label>
           </div>
 
           <div className="form-group">
-            <label>Firmware Version</label>
-            <input
-              type="text"
-              placeholder="hint"
-              value={version}
-              onChange={(e) => setVersion(e.target.value)}
-              required
-            />
+            <label>
+              Firmware Version
+              <input type="text" name="version" placeholder="hint" required />
+            </label>
           </div>
 
           <div className="form-group">
-            <label>Firmware Binary (.bin)</label>
-            <div className="file-input-wrapper">
-              <input
-                type="file"
-                className="simple-file-input"
-                accept=".bin"
-                onChange={handleFileChange}
-                required
-              />
-            </div>
-            <span className="help-text">Only compiled .bin files are accepted.</span>
+            <label>
+              Admin Key
+              <input type="password" name="admin_key" placeholder="hint" required />
+            </label>
           </div>
 
-          <button type="submit" className="submit-btn">
+          <div className="form-group">
+            <label>
+              Firmware Binary (.bin)
+              <div className="file-input-wrapper">
+                <input
+                  type="file"
+                  name="firmware"
+                  className="simple-file-input"
+                  accept=".bin"
+                  required
+                  />
+              </div>
+              <span className="help-text">Only compiled .bin files are accepted.</span>
+            </label>
+          </div>
+
+          {message && <p className="help-text">{message}</p>}
+
+          <button type="submit" className="submit-btn" disabled={submitting}>
             Upload & Sign Firmware
           </button>
         </form>
