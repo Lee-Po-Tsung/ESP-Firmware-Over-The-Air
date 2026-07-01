@@ -15,6 +15,7 @@ from __future__ import annotations
 import datetime
 import html
 
+from domain.models import Firmware
 from application.check_update import CheckUpdate, ModelNotFound
 from application.upload_firmware import UploadFirmware, UploadFirmwareRequest
 from config import Settings, get_settings
@@ -83,6 +84,12 @@ def download_firmware(
         media_type="application/octet-stream",
         headers={"Content-Disposition": f'attachment; filename="{firmware.filename}"'},
     )
+
+@router.get("/api/firmware/list")
+def firmware_list(
+    repo: FirmwareRepository = Depends(get_firmware_repository),
+) -> list[Firmware]:
+    return repo.list_all()
 
 
 """

@@ -10,7 +10,6 @@ export default defineConfig({
   ],
   server: {
     proxy: {
-      // 當前端請求 /api 時，自動轉發到後端
       '/api': {
         target: 'http://localhost:1234',
         changeOrigin: true,

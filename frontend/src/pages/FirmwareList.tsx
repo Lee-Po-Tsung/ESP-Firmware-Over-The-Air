@@ -1,4 +1,4 @@
-import React from 'react';
+import React, {useState, useEffect} from 'react';
 import { Link } from 'react-router';
 import './FirmwareList.css';
 
@@ -12,28 +12,22 @@ interface Firmware {
   created_at: string;
 }
 
-const mockFirmwares: Firmware[] = [
-  {
-    id: 1,
-    model: "esp32-cam",
-    version: "v1.0.0",
-    filename: "firmware_esp32_cam_v1.0.0.bin",
-    signature: "base64encoded_signature_string_here...",
-    sha256: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-    created_at: "2023-10-25T14:30:00Z"
-  },
-  {
-    id: 2,
-    model: "esp32-wroom-32",
-    version: "v1.1.2",
-    filename: "firmware_esp32_wroom_v1.1.2.bin",
-    signature: "another_base64encoded_signature_string...",
-    sha256: "8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92",
-    created_at: "2023-10-28T09:15:00Z"
-  }
-];
+async function fetchFirmwares(): Promise<Firmware[]> {
+  return fetch("/api/api/firmware/list").then(res => res.json()).then(json => json as Firmware[]);
+}
 
 export default function FirmwareList() {
+  const [firmwares, setfirmwares] = useState<Firmware[]>([]);
+
+  useEffect(() => {
+    try {
+      fetchFirmwares().then(fws => setfirmwares(fws));
+    }
+    catch (e) {
+      console.error("Failed to fetch firmwares:", e);
+    }
+  }, []);
+
   return (
     <div className="page-wrapper">
       <div className="main-card">
@@ -56,7 +50,7 @@ export default function FirmwareList() {
           </h2>
 
           <div className="firmware-stack">
-            {mockFirmwares.map(fw => (
+            {firmwares.map(fw => (
               <div key={fw.id} className="fw-row-card">
                 <div className="fw-row-header">
                   <div className="fw-identity">
