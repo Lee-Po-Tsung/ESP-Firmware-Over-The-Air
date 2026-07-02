@@ -18,7 +18,7 @@ export default function FirmwareUpload() {
     setMessage(null);
 
     try {
-      const res = await fetch('/api/firmware/upload', {
+      const res = await fetch('/backend/firmware/upload', {
         method: 'POST',
         body: new FormData(form),
       });
@@ -78,7 +78,7 @@ export default function FirmwareUpload() {
                   className="simple-file-input"
                   accept=".bin"
                   required
-                  />
+                />
               </div>
               <span className="help-text">Only compiled .bin files are accepted.</span>
             </label>

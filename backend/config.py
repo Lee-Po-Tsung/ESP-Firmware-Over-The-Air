@@ -9,6 +9,7 @@ local-dev defaults. The SQLite database and uploaded firmware live under
 from __future__ import annotations
 
 import os
+from dotenv import load_dotenv
 from functools import lru_cache
 from pathlib import Path
 
@@ -17,6 +18,8 @@ BACKEND_DIR = Path(__file__).resolve().parent
 
 class Settings:
     def __init__(self) -> None:
+        load_dotenv() # load environ from backend/.env
+
         self.data_dir = Path(os.environ.get("DATA_DIR", BACKEND_DIR / "data"))
         self.firmware_dir = Path(os.environ.get("FIRMWARE_DIR", self.data_dir / "firmware"))
         self.db_path = Path(os.environ.get("DB_PATH", self.data_dir / "app.db"))
@@ -31,6 +34,9 @@ class Settings:
 
         # Shared admin key gating uploads — replaced by real auth in M2.
         self.admin_key = os.environ.get("ADMIN_KEY", "super_secret_admin_key")
+
+        self.google_client_id = os.environ.get("GOOGLE_OAUTH_CLIENT_ID", None)
+        self.frontend_url = os.environ.get("FRONTEND_URL", None)
 
     @property
     def database_url(self) -> str:

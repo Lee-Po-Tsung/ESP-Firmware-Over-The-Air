@@ -1,4 +1,4 @@
-import React, {useState, useEffect} from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router';
 import './FirmwareList.css';
 
@@ -13,7 +13,7 @@ interface Firmware {
 }
 
 async function fetchFirmwares(): Promise<Firmware[]> {
-  return fetch("/api/api/firmware/list").then(res => res.json()).then(json => json as Firmware[]);
+  return fetch("/backend/api/firmware/list").then(res => res.json()).then(json => json as Firmware[]);
 }
 
 export default function FirmwareList() {
