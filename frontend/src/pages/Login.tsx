@@ -1,25 +1,52 @@
+import { useEffect, useRef } from 'react';
 import './Login.css';
 
 function GoogleLoginButton() {
-    return (
-        <button type="button" className="social-btn google-btn" aria-label="Sign in with Google">
-            <span className="social-icon" aria-hidden="true">
-              G
-            </span>
-            Continue with Google
-          </button>
-    );
+  const divRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const script = document.createElement('script');
+    script.src = "https://accounts.google.com/gsi/client";
+    script.async = true;
+    script.defer = true;
+    document.body.appendChild(script);
+    script.addEventListener('load', () => {
+      (window as any).google.accounts.id.initialize({
+        client_id: import.meta.env.VITE_GOOGLE_OAUTH_ID,
+        ux_mode: 'redirect',
+        login_uri: `${import.meta.env.VITE_BACKEND}/api/auth/google`,
+      });
+
+      (window as any).google.accounts.id.renderButton(
+        divRef.current!,
+        {
+          type: "standard",
+          theme: "outline",
+          size: "large"
+        }
+      );
+    })
+
+    return () => {
+      document.body.removeChild(script);
+    };
+  });
+
+
+  return (
+    <div ref={divRef}></div> // fetch google button style fail(403)
+  );
 }
 
 function GitHubLoginButton() {
-    return (
-        <button type="button" className="social-btn github-btn" aria-label="Sign in with GitHub">
-            <span className="social-icon" aria-hidden="true">
-              GH
-            </span>
-            Continue with GitHub
-          </button>
-    );
+  return (
+    <button type="button" className="social-btn github-btn" aria-label="Sign in with GitHub">
+      <span className="social-icon" aria-hidden="true">
+        GH
+      </span>
+      Continue with GitHub
+    </button>
+  );
 }
 
 export default function Login() {
@@ -32,8 +59,8 @@ export default function Login() {
         </div>
 
         <div className="login-actions">
-            <GoogleLoginButton />
-            <GitHubLoginButton />
+          <GoogleLoginButton />
+          <GitHubLoginButton />
         </div>
 
         <p className="login-note">Authentication wiring will be added later.</p>

@@ -19,11 +19,13 @@ from domain.models import Firmware
 from application.check_update import CheckUpdate, ModelNotFound
 from application.upload_firmware import UploadFirmware, UploadFirmwareRequest
 from config import Settings, get_settings
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status, Cookie
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from ports.repository import FirmwareRepository
 from ports.storage import StorageBackend
 from pydantic import BaseModel
+from google.oauth2 import id_token
+from google.auth.transport import requests
 
 from api.deps import (
     get_check_update,
@@ -91,6 +93,129 @@ def firmware_list(
 ) -> list[Firmware]:
     return repo.list_all()
 
+@router.post("/api/auth/google")
+def google_oauth(
+    client_id: str = Form(...),
+    credential: str = Form(...),
+    g_csrf_token: str = Form(...),
+    g_csrf_token_cookie: str | None = Cookie(None, alias="g_csrf_token"),
+    settings = Depends(get_settings)
+):  
+    WEB_CLIENT_ID = settings.google_client_id
+    FRONTEND_URL = settings.frontend_url
+
+    if not FRONTEND_URL:
+        raise Exception("Missing FRONTEND_URL in .env file")
+    
+    # CSRF
+    if not g_csrf_token or not g_csrf_token_cookie or g_csrf_token != g_csrf_token_cookie:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, 
+            detail="CSRF token does not match"
+        )
+
+    if not credential:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, 
+            detail="Missing credential"
+        )
+
+    if not client_id or not WEB_CLIENT_ID or client_id != WEB_CLIENT_ID:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, 
+            detail="Invalid client ID or missing client ID"
+        ) 
+
+    try:
+        try:
+            idinfo = id_token.verify_oauth2_token(
+                credential,
+                requests.Request(),
+                WEB_CLIENT_ID,
+                clock_skew_in_seconds=10 # fastapi need about 5s, otherwise clock faster than google site and then error.
+            )
+        except Exception as e:
+            print(repr(e))
+            raise
+
+        # google_id = idinfo['sub']
+        # email = idinfo.get('email')
+        # name = idinfo.get('name')
+        # picture = idinfo.get('picture')
+        
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, 
+            detail="Invalid or expired Google sign-in credentials."
+        )
+
+    # db save userdata
+
+    # stmt = select(User).where(User.google_id == google_id)
+    # user = db.execute(stmt).scalar_one_or_none()
+
+    # if not user:
+    #     user = User(
+    #         google_id=google_id,
+    #         email=email,
+    #         name=name,
+    #         picture=picture,
+    #     )
+
+    #     db.add(user)
+    #     db.commit()
+    #     db.refresh(user)
+
+    response = RedirectResponse(FRONTEND_URL, status_code=status.HTTP_302_FOUND)
+
+    # create session token (PyJWT)
+
+    # iat = datetime.now(timezone.utc)
+    # exp = iat + timedelta(days=1)
+    # my_site_payload = {
+    #     "sub": str(user.id),
+    #     "exp": exp,
+    #     "iat": iat
+    # }
+    # my_site_token = jwt.encode(my_site_payload, SECRET_KEY, algorithm=ALGORITHM)
+
+    my_site_token = "123"
+
+    response.set_cookie(
+        key="_token", 
+        value=my_site_token, 
+        httponly=True,
+        samesite="lax"
+    )
+
+    return response
+
+@router.get("/api/user")
+def get_user_info(token: str | None = Cookie(None, alias="_token")):
+    
+    if not token:
+        return {"status": 0, "msg": "not login"}
+
+    # try:
+    #     payload = jwt.decode(my_token, SECRET_KEY, algorithms=[ALGORITHM])
+    #     uid_str = payload.get("sub")
+    #     uid = int(uid_str)
+    # except (jwt.ExpiredSignatureError, jwt.InvalidTokenError, ValueError, TypeError):
+    #     raise HTTPException(status_code=401, detail="Invalid or expired session.")
+
+    # stmt = select(User).where(User.id == uid)
+    # user_in_db = db.execute(stmt).scalar_one_or_none()
+
+    # if user_in_db is None:
+    #     return {"status": 0, "msg": "not login"}
+        
+    return {
+        "status": 1, 
+        "msg": "login",
+        # "email": user_in_db.email,
+        # "name": user_in_db.name,
+        # "picture": user_in_db.picture
+    }
 
 """
 Simple HTML test page

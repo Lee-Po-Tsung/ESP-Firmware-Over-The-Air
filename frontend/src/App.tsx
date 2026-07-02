@@ -4,7 +4,7 @@ import { Routes, Route, Link, useLocation } from 'react-router'
 import FirmwareList from './pages/FirmwareList';
 import FirmwareUpload from './pages/FirmwareUpload';
 import Login from './pages/Login';
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 
 function Header({ login }: { login: boolean }) {
   const { pathname } = useLocation();
@@ -41,7 +41,15 @@ function Header({ login }: { login: boolean }) {
 }
 
 function App() {
-  const [isLoggedIn] = useState(false);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  useEffect(() => {
+    fetch("backend/api/user")
+      .then(res => res.json())
+      .then(json => {
+        console.log(json);
+        setIsLoggedIn(json["status"] === 1);
+      });
+  }, []);
 
   return (
     <>
