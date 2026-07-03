@@ -19,13 +19,15 @@ from domain.models import Firmware
 from application.check_update import CheckUpdate, ModelNotFound
 from application.upload_firmware import UploadFirmware, UploadFirmwareRequest
 from config import Settings, get_settings
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status, Cookie
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status, Cookie, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from ports.repository import FirmwareRepository
 from ports.storage import StorageBackend
 from pydantic import BaseModel
 from google.oauth2 import id_token
 from google.auth.transport import requests
+from uuid import uuid4
+import requests # may use httpx in future for async
 
 from api.deps import (
     get_check_update,
@@ -190,9 +192,121 @@ def google_oauth(
 
     return response
 
-@router.get("/api/user")
-def get_user_info(token: str | None = Cookie(None, alias="_token")):
+@router.get("/api/auth/github")
+def github_oauth(
+    code: str,
+    state: str,
+    request: Request,
+    state_cookie: str | None = Cookie(None, alias="_state"),
+    settings = Depends(get_settings)
+):  
+    WEB_CLIENT_ID = settings.github_client_id
+    WEB_CLIENT_SECRET = settings.github_client_secret
+    FRONTEND_URL = settings.frontend_url
+
+    base = str(request.base_url).rstrip("/")
+    redirect_uri = f"{base}{request.url.path}"
+
+    if not code:
+        raise  HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, 
+            detail="Fail to fetch github code."
+        )
+
+    if not FRONTEND_URL:
+        raise Exception("Missing FRONTEND_URL in .env file")
+
+    if not WEB_CLIENT_ID:
+        raise Exception("Missing WEB_CLIENT_ID in .env file")
+
+    if not WEB_CLIENT_SECRET:
+        raise Exception("Missing WEB_CLIENT_SECRET in .env file")
+
+    if not state_cookie or not state or state_cookie != state:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, 
+            detail="Invalid or missing state."
+        ) 
+
+
+    data = {
+        "client_id": WEB_CLIENT_ID,
+        "client_secret": WEB_CLIENT_SECRET,
+        "code": code,
+        "redirect_uri": redirect_uri
+    }
+
+    github_token = requests.post(
+        "https://github.com/login/oauth/access_token", 
+        json=data,
+        headers={"Accept": "application/json"}
+    )
+
+    if not github_token.ok:
+        raise  HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, 
+            detail="Fail to fetch github access token."
+        )
+    access_token = github_token.json()["access_token"]
+
+    user_data = requests.get("https://api.github.com/user", headers={"Authorization": f"Bearer {access_token}"})
+
+    if not user_data.ok:
+        raise  HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, 
+            detail="Fail to fetch user data from github."
+        )
+
+    print(user_data.json())
+
+    response = RedirectResponse(FRONTEND_URL, status_code=status.HTTP_302_FOUND)
+    my_site_token = "123"
+
+    response.set_cookie(
+        key="_token", 
+        value=my_site_token, 
+        httponly=True,
+        samesite="lax"
+    )
+
+    return response
+
+@router.get("/api/auth/github/url")
+def gen_github_url(
+    request: Request,
+    response: Response,
+    settings = Depends(get_settings)
+):  
+    WEB_CLIENT_ID = settings.github_client_id
+
+    if not WEB_CLIENT_ID:
+        raise Exception("Missing WEB_CLIENT_ID in .env file")
     
+    state = uuid4().hex
+    response.set_cookie(
+        key="_state",
+        value=state,
+        httponly=True,
+        samesite="lax"
+    )
+
+    base = str(request.base_url).rstrip("/")
+    path = router.url_path_for("github_oauth")
+    redirect_uri = f"{base}{path}"
+
+    url = "https://github.com/login/oauth/authorize?client_id={}&redirect_uri={}&scope={}&state={}".format(
+        WEB_CLIENT_ID,
+        redirect_uri,
+        "%20".join(["user:email"]),
+        state
+    )
+
+    return {"url": url}
+
+@router.get("/api/user")
+def get_user_info(
+    token: str | None = Cookie(None, alias="_token")
+):
     if not token:
         return {"status": 0, "msg": "not login"}
 

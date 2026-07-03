@@ -36,7 +36,11 @@ class Settings:
         self.admin_key = os.environ.get("ADMIN_KEY", "super_secret_admin_key")
 
         self.google_client_id = os.environ.get("GOOGLE_OAUTH_CLIENT_ID", None)
+
         self.frontend_url = os.environ.get("FRONTEND_URL", None)
+
+        self.github_client_id = os.environ.get("GITHUB_OAUTH_CLIENT_ID", None)
+        self.github_client_secret = os.environ.get("GITHUB_OAUTH_CLIENT_SECRET", None)
 
     @property
     def database_url(self) -> str:

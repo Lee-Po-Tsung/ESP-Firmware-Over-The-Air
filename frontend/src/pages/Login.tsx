@@ -39,8 +39,20 @@ function GoogleLoginButton() {
 }
 
 function GitHubLoginButton() {
+  function handleClick() {
+    try {
+      fetch("/backend/api/auth/github/url").then(res => res.json()).then(json => {
+        const url = json["url"];
+        if (url === null) throw new Error("Failed to fetch GitHub URL");
+        window.location.href = url;
+      })
+    }
+    catch (e) {
+      console.error(e)
+    }
+  }
   return (
-    <button type="button" className="social-btn github-btn" aria-label="Sign in with GitHub">
+    <button type="button" className="social-btn github-btn" aria-label="Sign in with GitHub" onClick={handleClick}>
       <span className="social-icon" aria-hidden="true">
         GH
       </span>

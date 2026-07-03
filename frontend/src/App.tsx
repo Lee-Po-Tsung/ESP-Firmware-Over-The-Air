@@ -43,12 +43,17 @@ function Header({ login }: { login: boolean }) {
 function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   useEffect(() => {
-    fetch("backend/api/user")
-      .then(res => res.json())
-      .then(json => {
-        console.log(json);
-        setIsLoggedIn(json["status"] === 1);
-      });
+    try {
+      fetch("backend/api/user")
+        .then(res => res.json())
+        .then(json => {
+          console.log(json);
+          setIsLoggedIn(json["status"] === 1);
+        });
+    }
+    catch (e) {
+      console.error("Failed to fetch user info:", e);
+    }
   }, []);
 
   return (
