@@ -6,7 +6,7 @@ import FirmwareUpload from './pages/FirmwareUpload';
 import Login from './pages/Login';
 import { useState, useEffect } from 'react'
 
-function Header({ login }: { login: boolean }) {
+function Header({ login, logoutOnClick }: { login: boolean, logoutOnClick: () => void }) {
   const { pathname } = useLocation();
   const showBack = pathname === '/upload' || pathname === '/login';
 
@@ -26,7 +26,7 @@ function Header({ login }: { login: boolean }) {
 
         <div className="header-auth">
           {login ? (
-            <button type="button" className="auth-btn logout-btn">
+            <button type="button" className="auth-btn logout-btn" onClick={logoutOnClick}>
               Logout
             </button>
           ) : (
@@ -42,6 +42,23 @@ function Header({ login }: { login: boolean }) {
 
 function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+
+  function handleLogout() {
+    try {
+      fetch("backend/api/user/logout")
+        .then(res => res.json())
+        .then(json => {
+          if (!json["status"]) throw Error("Logout failed");
+          if (json["status"] === 1) {
+            setIsLoggedIn(false);
+          }
+        });
+    }
+    catch (e) {
+      console.error(e);
+    }
+  }
+
   useEffect(() => {
     try {
       fetch("backend/api/user")
@@ -58,7 +75,7 @@ function App() {
 
   return (
     <>
-      <Header login={isLoggedIn} />
+      <Header login={isLoggedIn} logoutOnClick={handleLogout} />
       <Routes>
         <Route index element={<FirmwareList />} />
         <Route path="/upload" element={<FirmwareUpload />} />

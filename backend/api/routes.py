@@ -257,7 +257,12 @@ def github_oauth(
             detail="Fail to fetch user data from github."
         )
 
-    print(user_data.json())
+    # print(user_data.json())
+    # user_data["login"] # account name
+    # user_data["id"] # github id
+    # user_data["avatar_url"] # picture
+    # user_data["email"] # email (may be empty)
+    # user_data["name"] # nickname
 
     response = RedirectResponse(FRONTEND_URL, status_code=status.HTTP_302_FOUND)
     my_site_token = "123"
@@ -302,6 +307,26 @@ def gen_github_url(
     )
 
     return {"url": url}
+
+@router.get("/api/user/logout")
+def user_logout(
+    response: Response,
+    token: str | None = Cookie(None, alias="_token")
+):
+    # del token in db
+    if token:
+        ...
+    
+    # del cookie
+    response.set_cookie(
+        key="_token", 
+        value="", 
+        httponly=True,
+        samesite="lax",
+        expires=datetime.datetime.fromtimestamp(0, tz=datetime.timezone.utc)
+    )
+
+    return {"status": 1, "msg": "logout"}
 
 @router.get("/api/user")
 def get_user_info(
