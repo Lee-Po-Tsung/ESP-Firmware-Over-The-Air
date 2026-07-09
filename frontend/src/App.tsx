@@ -1,12 +1,10 @@
-// import { useState } from 'react'
 import './App.css'
 import { Routes, Route, Link, useLocation } from 'react-router'
 import FirmwareList from './pages/FirmwareList';
 import FirmwareUpload from './pages/FirmwareUpload';
 import Login from './pages/Login';
-import { useState, useEffect } from 'react'
 
-function Header({ login, logoutOnClick }: { login: boolean, logoutOnClick: () => void }) {
+function Header() {
   const { pathname } = useLocation();
   const showBack = pathname === '/upload' || pathname === '/login';
 
@@ -25,15 +23,9 @@ function Header({ login, logoutOnClick }: { login: boolean, logoutOnClick: () =>
         )}
 
         <div className="header-auth">
-          {login ? (
-            <button type="button" className="auth-btn logout-btn" onClick={logoutOnClick}>
-              Logout
-            </button>
-          ) : (
-            <Link to="/login" className="auth-btn login-btn">
-              Login
-            </Link>
-          )}
+          <Link to="/login" className="auth-btn login-btn">
+            Login
+          </Link>
         </div>
       </div>
     </header>
@@ -41,41 +33,9 @@ function Header({ login, logoutOnClick }: { login: boolean, logoutOnClick: () =>
 }
 
 function App() {
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-
-  function handleLogout() {
-    try {
-      fetch("backend/api/user/logout")
-        .then(res => res.json())
-        .then(json => {
-          if (!json["status"]) throw Error("Logout failed");
-          if (json["status"] === 1) {
-            setIsLoggedIn(false);
-          }
-        });
-    }
-    catch (e) {
-      console.error(e);
-    }
-  }
-
-  useEffect(() => {
-    try {
-      fetch("backend/api/user")
-        .then(res => res.json())
-        .then(json => {
-          console.log(json);
-          setIsLoggedIn(json["status"] === 1);
-        });
-    }
-    catch (e) {
-      console.error("Failed to fetch user info:", e);
-    }
-  }, []);
-
   return (
     <>
-      <Header login={isLoggedIn} logoutOnClick={handleLogout} />
+      <Header />
       <Routes>
         <Route index element={<FirmwareList />} />
         <Route path="/upload" element={<FirmwareUpload />} />
