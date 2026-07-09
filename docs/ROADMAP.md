@@ -32,9 +32,9 @@ break things and review stays cheap.
 - [x] Repo layout decided: `backend/`, `frontend/`, `esp32/`, shared `docs/`
 - [x] Python env via `uv`, locked with `uv.lock`, setup documented in README
 - [x] Formatters committed: `black` + `ruff` for Python, `clang-format` for
-  [x] ++ (`prettier` + `eslint` deferred until M3 when the frontend starts)
+      [x] ++ (`prettier` + `eslint` deferred until M3 when the frontend starts)
 - [x] Commit and branch policy in place: feature branch per change, small commits,
-  [x] numbered or decorative comments, plain English
+      [x] numbered or decorative comments, plain English
 - [x] Pull request workflow: every change goes through a PR; main is protected
 - [x] CI on every PR: `.github/workflows/lint.yml` runs black, ruff, and clang-format in check mode; failing PR cannot be merged
 - [x] Pre-commit local gate (`.pre-commit-config.yaml`) mirrors CI
@@ -84,6 +84,7 @@ beginner fills in concrete adapters from a template — given `StorageBackend`
 and `local_storage.py`, they write `s3_storage.py` the same way.
 
 **Tasks:**
+
 - [x] Scaffold the `backend/` tree above; wire FastAPI with SQLAlchemy and Alembic
 - [x] Port the existing RSA-PSS signing and `model|version|sha256` manifest logic from the Flask code into `domain/signing.py`; keep it byte-for-byte compatible so existing signatures still verify on-device
 - [x] Firmware model and an upload endpoint, gated by the existing admin key for now (real auth comes in M2)
@@ -128,10 +129,13 @@ key no longer exists anywhere in the repo.
 The smallest web UI someone would actually pay to use. Three screens, nothing
 more.
 
-- React with TypeScript and Vite, styled with shadcn/ui
-- Login page; keep the JWT in memory, not localStorage
-- Firmware page: list of versions per model, plus an upload form
-- Device page: list of devices with current version and last-seen time
+- [x] React with TypeScript and Vite, styled with shadcn/ui
+- [x] Login page scaffolded (visual only for now); Google/GitHub OAuth was
+      prototyped directly against the backend, then stripped back out since it
+      had no real session/JWT behind it — wire it up properly once M2 lands,
+      keeping the JWT in memory, not localStorage
+- [x] Firmware page: list of versions per model, plus an upload form
+- [ ] Device page: list of devices with current version and last-seen time
 - Deliberately out of scope here: fleet charts, audit log, user management
 - A Playwright end-to-end test for the upload flow **(good first task)**
 

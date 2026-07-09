@@ -18,6 +18,7 @@ import html
 from application.check_update import CheckUpdate, ModelNotFound
 from application.upload_firmware import UploadFirmware, UploadFirmwareRequest
 from config import Settings, get_settings
+from domain.models import Firmware
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from ports.repository import FirmwareRepository
@@ -82,6 +83,13 @@ def download_firmware(
         media_type="application/octet-stream",
         headers={"Content-Disposition": f'attachment; filename="{firmware.filename}"'},
     )
+
+
+@router.get("/api/firmware/list")
+def firmware_list_api(
+    repo: FirmwareRepository = Depends(get_firmware_repository),
+) -> list[Firmware]:
+    return repo.list_all()
 
 
 """
