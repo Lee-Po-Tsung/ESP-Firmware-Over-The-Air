@@ -9,6 +9,29 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
+from enum import Enum
+
+
+class Role(str, Enum):
+    """Who is allowed to do what.
+
+    `admin` publishes firmware and manages users; `operator` is a read-mostly
+    account for the dashboard. Stored as its string value in the database.
+    """
+
+    ADMIN = "admin"
+    OPERATOR = "operator"
+
+
+@dataclass
+class User:
+    """A dashboard account. `password_hash` is a bcrypt hash, never the plaintext."""
+
+    username: str
+    password_hash: str
+    role: Role = Role.OPERATOR
+    id: int | None = None
+    created_at: datetime | None = None
 
 
 @dataclass
