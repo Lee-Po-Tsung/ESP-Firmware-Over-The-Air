@@ -23,7 +23,7 @@ export default function FirmwareUpload() {
         body: new FormData(form),
       });
 
-      if (!res.ok && res.status !== 303) {
+      if (!res.ok) {
         setMessage(`Upload failed (HTTP ${res.status})`);
         return;
       }
