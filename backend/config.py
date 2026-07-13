@@ -12,7 +12,22 @@ import os
 from functools import lru_cache
 from pathlib import Path
 
+from dotenv import load_dotenv
+
+# Load a local `.env` (repo root or backend/) into the environment before any
+# setting is read. Real values live there; the repo only ships `.env.example`.
+load_dotenv(Path(__file__).resolve().parent / ".env")
+load_dotenv()
+
 BACKEND_DIR = Path(__file__).resolve().parent
+
+
+def _require_env(name: str) -> str:
+    """Read a mandatory secret from the environment, failing loudly if unset."""
+    value = os.environ.get(name)
+    if not value:
+        raise RuntimeError(f"{name} is not set. Copy backend/.env.example to backend/.env.")
+    return value
 
 
 class Settings:
@@ -29,8 +44,10 @@ class Settings:
             os.environ.get("PUBLIC_KEY_PATH", self.keys_dir / "public_key.pem")
         )
 
-        # Shared admin key gating uploads — replaced by real auth in M2.
-        self.admin_key = os.environ.get("ADMIN_KEY", "super_secret_admin_key")
+        # No fallback secret on purpose: a hardcoded default is exactly the
+        # shared-admin-key mistake this milestone removes. Set JWT_SECRET in .env.
+        self.jwt_secret = _require_env("JWT_SECRET")
+        self.jwt_expires_minutes = int(os.environ.get("JWT_EXPIRES_MINUTES", "60"))
 
     @property
     def database_url(self) -> str:
