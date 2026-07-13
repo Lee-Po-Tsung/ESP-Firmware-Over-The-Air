@@ -45,7 +45,7 @@ us can clone the repo and run the app from a documented setup.
 
 ---
 
-## M1 — Core OTA Backend (In Progress - Backend completed, client-side fixes and tests pending)
+## M1 — Core OTA Backend (In Progress - Backend and its unit tests done, ESP32-side fixes and tests pending)
 
 **Title:** `M1 — Core OTA Backend`
 
@@ -92,7 +92,7 @@ and `local_storage.py`, they write `s3_storage.py` the same way.
 - [x] Local-filesystem `StorageBackend`; firmware binaries on disk, metadata in SQLite
 - [ ] Fix the two known ESP32 issues while porting: replace the hardcoded system time with SNTP, and align the version-compare logic between device and server
 - [ ] Write `CONTRIBUTING.md` as warm-up **(good first task)**
-- [ ] Add unit tests for the signing and version-compare logic **(good first task)**
+- [x] Add unit tests for the signing and version-compare logic **(good first task)** — grew to cover the application layer, `sqlite_repo`, `local_storage`, and API routes as well; ESP32-side verification is still untested
 
 **Done when:** The existing ESP32 device can check, download, verify, and flash a
 firmware update served by the new FastAPI backend. Same behaviour as today, new
