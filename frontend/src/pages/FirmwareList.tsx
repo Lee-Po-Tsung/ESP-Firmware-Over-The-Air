@@ -20,12 +20,9 @@ export default function FirmwareList() {
   const [firmwares, setfirmwares] = useState<Firmware[]>([]);
 
   useEffect(() => {
-    try {
-      fetchFirmwares().then(fws => setfirmwares(fws));
-    }
-    catch (e) {
-      console.error("Failed to fetch firmwares:", e);
-    }
+    fetchFirmwares()
+      .then(fws => setfirmwares(fws))
+      .catch(e => console.error("Failed to fetch firmwares:", e));
   }, []);
 
   return (

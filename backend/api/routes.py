@@ -5,22 +5,22 @@ Device protocol:
 - `POST /api/check`
 - `GET /api/download/{id}`
 
-with a small HTML page for listing and uploading firmware by hand. Each handler reads
-the request, calls a use case, and shapes the response. Field names and status
-codes follow what the ESP32 firmware in `esp32/main/ota.cpp` expects.
+plus `POST /firmware/upload` for the admin frontend to publish signed firmware.
+Each handler reads the request, calls a use case, and shapes the response. Field
+names and status codes follow what the ESP32 firmware in `esp32/main/ota.cpp`
+expects.
 """
 
 from __future__ import annotations
 
 import datetime
-import html
 
 from application.check_update import CheckUpdate, ModelNotFound
 from application.upload_firmware import UploadFirmware, UploadFirmwareRequest
 from config import Settings, get_settings
 from domain.models import Firmware
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
-from fastapi.responses import HTMLResponse, RedirectResponse, Response
+from fastapi.responses import Response
 from ports.repository import FirmwareRepository
 from ports.storage import StorageBackend
 from pydantic import BaseModel
@@ -93,49 +93,11 @@ def firmware_list_api(
 
 
 """
-Simple HTML test page
+Admin firmware upload
 """
 
 
-def _render_page(rows_html: str, message: str = "") -> str:
-    banner = f"<p><strong>{html.escape(message)}</strong></p>" if message else ""
-    return f"""<!doctype html>
-<html lang="zh-Hant"><head><meta charset="utf-8"><title>Firmware</title></head><body>
-{banner}
-<form method='post' action='/firmware/upload' enctype="multipart/form-data">
-<label for='model'>型號</label><input type='text' name='model'/><br>
-<label for='version'>版本</label><input type='text' name='version'/><br>
-<label for='admin_key'>管理員金鑰</label><input type='password' name='admin_key'/><br>
-<label for='firmware'>韌體檔案</label><input type='file' name='firmware'/><br>
-<input type='submit'></form><br>
-<table border="1"><thead><tr><th>型號</th><th>版本</th><th>檔名</th></tr></thead>
-<tbody>{rows_html}</tbody>
-</table>
-</body></html>"""
-
-
-@router.get("/", include_in_schema=False)
-def root() -> RedirectResponse:
-    return RedirectResponse(url="/firmware")
-
-
-@router.get("/firmware", response_class=HTMLResponse, include_in_schema=False)
-def firmware_list(
-    repo: FirmwareRepository = Depends(get_firmware_repository),
-) -> HTMLResponse:
-    rows = []
-    for fw in repo.list_all():
-        rows.append(
-            "<tr>"
-            f"<td>{html.escape(fw.model)}</td>"
-            f"<td>{html.escape(fw.version)}</td>"
-            f"<td>{html.escape(fw.filename)}</td>"
-            "</tr>"
-        )
-    return HTMLResponse(_render_page("".join(rows)))
-
-
-@router.post("/firmware/upload", response_class=HTMLResponse, include_in_schema=False)
+@router.post("/firmware/upload", include_in_schema=False)
 def upload(
     model: str = Form(...),
     version: str = Form(...),
@@ -143,7 +105,7 @@ def upload(
     firmware: UploadFile = File(...),
     use_case: UploadFirmware = Depends(get_upload_firmware),
     settings: Settings = Depends(get_settings),
-) -> HTMLResponse:
+) -> dict:
     require_admin_key(admin_key, settings)
 
     timestamp = datetime.datetime.now().strftime("%y%m%d_%H%M%S")
@@ -157,7 +119,4 @@ def upload(
             timestamp=timestamp,
         )
     )
-    return HTMLResponse(
-        _render_page("", message="上傳成功"),
-        status_code=status.HTTP_303_SEE_OTHER,
-    )
+    return {"status": "ok"}

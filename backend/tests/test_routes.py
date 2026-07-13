@@ -158,23 +158,3 @@ def test_firmware_list_api_returns_all_firmware_as_json(client):
     assert response.status_code == 200
     assert response.json()[0]["model"] == "ESP32"
     assert response.json()[0]["id"] == 1
-
-
-def test_root_redirects_to_firmware_page(client):
-    response = client.get("/", follow_redirects=False)
-
-    assert response.status_code in (302, 307)
-    assert response.headers["location"] == "/firmware"
-
-
-def test_firmware_page_renders_uploaded_firmware(client):
-    firmware = make_firmware(model="ESP32", version="1.0.0", firmware_id=1)
-    app.dependency_overrides[get_firmware_repository] = lambda: FakeFirmwareRepository(
-        all_firmware=[firmware]
-    )
-
-    response = client.get("/firmware")
-
-    assert response.status_code == 200
-    assert "ESP32" in response.text
-    assert "1.0.0" in response.text
