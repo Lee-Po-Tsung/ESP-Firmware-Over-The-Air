@@ -50,11 +50,12 @@ def get_upload_firmware(
     return UploadFirmware(repo, storage, settings.read_private_key())
 
 
-def require_admin_key(
-    admin_key: str,
-    settings: Settings = Depends(get_settings),
-) -> None:
-    """Gate write endpoints behind the shared admin key (replaced by real auth in M2)."""
+def require_admin_key(admin_key: str, settings: Settings) -> None:
+    """Gate write endpoints behind the shared admin key (replaced by real auth in M2).
+
+    A plain helper called from the handler, not a FastAPI dependency: the handler
+    already has `settings` and the key arrives as a form field, not a header.
+    """
     if admin_key != settings.admin_key:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
