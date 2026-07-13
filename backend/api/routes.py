@@ -18,12 +18,13 @@ import datetime
 from application.auth import AuthenticateUser, InvalidCredentials, RegisterUser, RegisterUserRequest
 from application.check_update import CheckUpdate, ModelNotFound
 from application.upload_firmware import UploadFirmware, UploadFirmwareRequest
+from domain.auth import MAX_PASSWORD_BYTES
 from domain.models import Firmware, User
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from fastapi.responses import Response
 from ports.repository import FirmwareRepository, UserAlreadyExists
 from ports.storage import StorageBackend
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from api.deps import (
     get_authenticate_user,
@@ -45,6 +46,15 @@ Auth
 class RegisterRequest(BaseModel):
     username: str = Field(min_length=1)
     password: str = Field(min_length=8)
+
+    @field_validator("password")
+    @classmethod
+    def _fits_bcrypt(cls, v: str) -> str:
+        # Byte length, not char count: bcrypt rejects >72 bytes and multi-byte
+        # UTF-8 passwords hit that well under 72 characters.
+        if len(v.encode("utf-8")) > MAX_PASSWORD_BYTES:
+            raise ValueError(f"password must be at most {MAX_PASSWORD_BYTES} bytes")
+        return v
 
 
 class LoginRequest(BaseModel):

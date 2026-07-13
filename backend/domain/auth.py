@@ -16,14 +16,28 @@ from domain.models import Role
 
 JWT_ALGORITHM = "HS256"
 
+# bcrypt refuses passwords over 72 bytes (raises since bcrypt 5.x). Input
+# boundaries validate against this instead of surfacing a 500.
+MAX_PASSWORD_BYTES = 72
+
 
 def hash_password(plaintext: str) -> str:
-    """Return a bcrypt hash of the password, safe to store."""
+    """Return a bcrypt hash of the password, safe to store.
+
+    Callers must reject passwords over MAX_PASSWORD_BYTES first; bcrypt
+    raises ValueError past that.
+    """
     return bcrypt.hashpw(plaintext.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
 
 def verify_password(plaintext: str, password_hash: str) -> bool:
-    """Check a plaintext password against a stored bcrypt hash."""
+    """Check a plaintext password against a stored bcrypt hash.
+
+    Over-long input can never match a stored hash (hash_password refuses it),
+    so report a mismatch instead of letting bcrypt raise on a login attempt.
+    """
+    if len(plaintext.encode("utf-8")) > MAX_PASSWORD_BYTES:
+        return False
     return bcrypt.checkpw(plaintext.encode("utf-8"), password_hash.encode("utf-8"))
 
 

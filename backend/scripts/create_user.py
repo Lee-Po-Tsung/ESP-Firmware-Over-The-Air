@@ -21,6 +21,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from application.auth import RegisterUser, RegisterUserRequest  # noqa: E402
+from domain.auth import MAX_PASSWORD_BYTES  # noqa: E402
 from domain.models import Role  # noqa: E402
 from infrastructure.db import SessionLocal  # noqa: E402
 from infrastructure.sqlite_repo import SqliteUserRepository  # noqa: E402
@@ -34,8 +35,12 @@ def main() -> int:
     args = parser.parse_args()
 
     password = os.environ.get("OTA_USER_PASSWORD") or getpass.getpass("Password: ")
-    if not password:
-        print("Password must not be empty.", file=sys.stderr)
+    # Same rules the register endpoint enforces.
+    if len(password) < 8:
+        print("Password must be at least 8 characters.", file=sys.stderr)
+        return 1
+    if len(password.encode("utf-8")) > MAX_PASSWORD_BYTES:
+        print(f"Password must be at most {MAX_PASSWORD_BYTES} bytes.", file=sys.stderr)
         return 1
 
     session = SessionLocal()

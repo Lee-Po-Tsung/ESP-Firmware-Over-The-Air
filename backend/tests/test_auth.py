@@ -17,6 +17,13 @@ def test_hash_password_is_verifiable_and_not_plaintext():
     assert not auth.verify_password("wrong", hashed)
 
 
+def test_verify_password_reports_mismatch_for_overlong_input():
+    # bcrypt raises past 72 bytes; a login attempt must get False, not a 500.
+    hashed = auth.hash_password("hunter2")
+
+    assert not auth.verify_password("x" * (auth.MAX_PASSWORD_BYTES + 1), hashed)
+
+
 def test_access_token_round_trips_id_and_role():
     token = auth.create_access_token(7, Role.ADMIN, secret="s3cret", expires_minutes=60)
 

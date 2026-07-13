@@ -98,6 +98,22 @@ def test_register_rejects_short_password(users, client):
     assert users.get_by_username("bob") is None
 
 
+def test_register_rejects_password_over_bcrypt_limit(users, client):
+    res = client.post("/api/auth/register", json={"username": "bob", "password": "x" * 73})
+
+    assert res.status_code == 422
+    assert users.get_by_username("bob") is None
+
+
+def test_login_rejects_overlong_password_as_401(users, client):
+    # Must be a clean 401, not a 500 from bcrypt's 72-byte limit.
+    users.seed("bob", "s3cretpw", Role.OPERATOR)
+
+    res = client.post("/api/auth/login", json={"username": "bob", "password": "x" * 73})
+
+    assert res.status_code == 401
+
+
 def test_register_rejects_duplicate_username(users, client):
     users.seed("bob", "s3cretpw", Role.OPERATOR)
 
