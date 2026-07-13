@@ -78,7 +78,7 @@ arduino-cli compile --fqbn esp32:esp32:esp32s3 --board-options "PartitionScheme=
   ```bash
   arduino-cli compile --fqbn esp32:esp32:esp32s3 --board-options "PartitionScheme=custom,CDCOnBoot=cdc" --output-dir build_out esp32/main
   ```
-- Upload the binary via the web interface at `https://YOUR_SERVER_IP:8000/firmware`, or programmatically:
+- Upload the binary via the `frontend/` web app, or programmatically:
   ```python
   import requests
   files = {'firmware': ('main.ino.bin', open('build_out/main.ino.bin', 'rb'))}
