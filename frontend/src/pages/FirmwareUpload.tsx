@@ -61,12 +61,8 @@ export default function FirmwareUpload() {
             </label>
           </div>
 
-          <div className="form-group">
-            <label>
-              Admin Key
-              <input type="password" name="admin_key" placeholder="hint" required />
-            </label>
-          </div>
+          {/* Admin auth moves to a bearer token from login in M3; the shared
+              admin key was removed in M2. */}
 
           <div className="form-group">
             <label>
