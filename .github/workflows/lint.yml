@@ -21,6 +21,9 @@ jobs:
       - name: ruff
         run: uv run ruff check .
 
+      - name: pytest
+        run: uv run pytest
+
       - name: clang-format
         run: |
           find esp32 -name '*.c' -o -name '*.cc' -o -name '*.cpp' \
