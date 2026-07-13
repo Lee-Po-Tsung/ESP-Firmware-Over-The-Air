@@ -9,7 +9,7 @@ local-dev defaults. The SQLite database and uploaded firmware live under
 from __future__ import annotations
 
 import os
-from functools import lru_cache
+from functools import cached_property, lru_cache
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -44,10 +44,15 @@ class Settings:
             os.environ.get("PUBLIC_KEY_PATH", self.keys_dir / "public_key.pem")
         )
 
-        # No fallback secret on purpose: a hardcoded default is exactly the
-        # shared-admin-key mistake this milestone removes. Set JWT_SECRET in .env.
-        self.jwt_secret = _require_env("JWT_SECRET")
         self.jwt_expires_minutes = int(os.environ.get("JWT_EXPIRES_MINUTES", "60"))
+
+    @cached_property
+    def jwt_secret(self) -> str:
+        # No fallback secret on purpose: a hardcoded default is exactly the
+        # shared-admin-key mistake M2 removes. Read lazily so key generation,
+        # TLS certs and alembic run before .env exists; anything touching auth
+        # still fails loudly. The server checks it at boot in main.py.
+        return _require_env("JWT_SECRET")
 
     @property
     def database_url(self) -> str:
