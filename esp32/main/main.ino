@@ -1,5 +1,4 @@
 #include <WiFi.h>
-#include <sys/time.h>
 
 #include "ota.h"
 
@@ -18,12 +17,6 @@ const String check_path = "/api/check";
 
 void setup() {
     Serial.begin(115200);
-
-    // Set system time to June 24, 2026 for TLS certificate validation
-    struct timeval tv;
-    tv.tv_sec = 1782283800;
-    tv.tv_usec = 0;
-    settimeofday(&tv, NULL);
 
     pinMode(LED_BUILTIN, OUTPUT);  // LED, for test ota
 
@@ -55,6 +48,12 @@ void setup() {
     }
 
     if (!connected) {
+        ESP.restart();
+    }
+
+    // SNTP needs the network, so this runs only after WiFi connects, and
+    // before markFirmwareValid()/loop() so every TLS handshake sees a real clock.
+    if (!syncTimeSNTP()) {
         ESP.restart();
     }
 

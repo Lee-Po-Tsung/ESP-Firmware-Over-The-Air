@@ -8,6 +8,7 @@
 #include <Update.h>
 #include <WiFi.h>
 #include <esp_ota_ops.h>
+#include <time.h>
 
 // For RSA and SHA-256
 // Docs: https://sourcevu.sysprogs.com/rp2040/lib/mbedtls/
@@ -359,17 +360,58 @@ bool downloadFirmwareToFS() {
     return true;
 }
 
-// Check if v1 is newer than v2. Returns true if v1 > v2.
-bool isVersionNewer(const String& v1, const String& v2) {
-    int val1[3] = {0, 0, 0};
-    int val2[3] = {0, 0, 0};
-    sscanf(v1.c_str(), "%d.%d.%d", &val1[0], &val1[1], &val1[2]);
-    sscanf(v2.c_str(), "%d.%d.%d", &val2[0], &val2[1], &val2[2]);
-    for (int i = 0; i < 3; i++) {
-        if (val1[i] > val2[i]) return true;
-        if (val1[i] < val2[i]) return false;
+// Split up to 3 dot-separated integer segments into out[]. Returns the count
+// actually found, so "1.2" yields 2 rather than being padded with a 0.
+int parseVersionSegments(const String& v, int out[3]) {
+    int count = 0;
+    int start = 0;
+    for (int part = 0; part < 3; part++) {
+        int dot = (part < 2) ? v.indexOf('.', start) : -1;
+        String segment = (dot == -1) ? v.substring(start) : v.substring(start, dot);
+        if (segment.length() == 0) break;
+        out[count++] = segment.toInt();
+        if (dot == -1) break;
+        start = dot + 1;
     }
-    return false;
+    return count;
+}
+
+// Check if v1 is newer than v2. Returns true if v1 > v2.
+//
+// Mirrors the server's tuple compare (domain/signing.compare_version and
+// sqlite_repo._version_key both do `list(map(int, v.split(".", 2)))`): a
+// version that is a strict prefix of another, e.g. "1.2" vs "1.2.0", compares
+// as older rather than equal, since Python compares lists of different
+// lengths that way.
+bool isVersionNewer(const String& v1, const String& v2) {
+    int seg1[3];
+    int seg2[3];
+    int n1 = parseVersionSegments(v1, seg1);
+    int n2 = parseVersionSegments(v2, seg2);
+
+    int n = min(n1, n2);
+    for (int i = 0; i < n; i++) {
+        if (seg1[i] > seg2[i]) return true;
+        if (seg1[i] < seg2[i]) return false;
+    }
+    return n1 > n2;
+}
+
+// Sync system time via SNTP. Needs an active WiFi connection, and must run
+// before any TLS handshake, since NetworkClientSecure validates the server
+// cert's notBefore/notAfter against the device clock.
+bool syncTimeSNTP() {
+    configTime(0, 0, "pool.ntp.org", "time.nist.gov");
+
+    struct tm timeinfo;
+    if (!getLocalTime(&timeinfo, 15000)) {
+        Serial.println("SNTP time sync failed");
+        return false;
+    }
+
+    Serial.print("SNTP time synced: ");
+    Serial.println(asctime(&timeinfo));
+    return true;
 }
 
 // Mark firmware valid to cancel auto-rollback
