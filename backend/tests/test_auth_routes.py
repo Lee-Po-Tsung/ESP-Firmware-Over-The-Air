@@ -38,9 +38,6 @@ class FakeUserRepository:
     def get_by_username(self, username: str) -> User | None:
         return self._by_name.get(username)
 
-    def count(self) -> int:
-        return len(self._by_id)
-
     def seed(self, username: str, password: str, role: Role) -> User:
         return self.add(
             User(username=username, password_hash=auth.hash_password(password), role=role)
@@ -87,17 +84,24 @@ def upload_files():
 
 
 def test_register_creates_operator(users, client):
-    res = client.post("/api/auth/register", json={"username": "bob", "password": "pw"})
+    res = client.post("/api/auth/register", json={"username": "bob", "password": "s3cretpw"})
 
     assert res.status_code == 201
     assert res.json()["role"] == "operator"
     assert users.get_by_username("bob") is not None
 
 
-def test_register_rejects_duplicate_username(users, client):
-    users.seed("bob", "pw", Role.OPERATOR)
+def test_register_rejects_short_password(users, client):
+    res = client.post("/api/auth/register", json={"username": "bob", "password": "short"})
 
-    res = client.post("/api/auth/register", json={"username": "bob", "password": "pw"})
+    assert res.status_code == 422
+    assert users.get_by_username("bob") is None
+
+
+def test_register_rejects_duplicate_username(users, client):
+    users.seed("bob", "s3cretpw", Role.OPERATOR)
+
+    res = client.post("/api/auth/register", json={"username": "bob", "password": "s3cretpw"})
 
     assert res.status_code == 409
 

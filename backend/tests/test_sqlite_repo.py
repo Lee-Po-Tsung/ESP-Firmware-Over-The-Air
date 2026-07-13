@@ -127,15 +127,6 @@ def test_user_add_rejects_duplicate_username(session):
         repo.add(make_user())
 
 
-def test_user_count_reflects_inserts(session):
-    repo = SqliteUserRepository(session)
-
-    assert repo.count() == 0
-    repo.add(make_user(username="a"))
-    repo.add(make_user(username="b"))
-    assert repo.count() == 2
-
-
 def test_get_user_by_username_returns_none_when_missing(session):
     repo = SqliteUserRepository(session)
 

@@ -28,10 +28,6 @@ class UserRepository(ABC):
     def get_by_username(self, username: str) -> User | None:
         """Return a user by username, or None."""
 
-    @abstractmethod
-    def count(self) -> int:
-        """Number of users, used to bootstrap the first account."""
-
 
 class UserAlreadyExists(Exception):
     """Raised when registering a username that already exists."""

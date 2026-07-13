@@ -13,7 +13,7 @@ from ports.repository import (
     UserAlreadyExists,
     UserRepository,
 )
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -73,9 +73,6 @@ class SqliteUserRepository(UserRepository):
     def get_by_username(self, username: str) -> User | None:
         row = self._session.scalar(select(UserRow).where(UserRow.username == username))
         return _to_user(row) if row else None
-
-    def count(self) -> int:
-        return self._session.scalar(select(func.count()).select_from(UserRow)) or 0
 
 
 class SqliteFirmwareRepository(FirmwareRepository):
