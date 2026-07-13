@@ -9,7 +9,28 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 
-from domain.models import Device, Firmware
+from domain.models import Device, Firmware, User
+
+
+class UserRepository(ABC):
+    @abstractmethod
+    def add(self, user: User) -> User:
+        """Persist a new user and return it with its assigned id.
+
+        Raises `UserAlreadyExists` if the username is taken.
+        """
+
+    @abstractmethod
+    def get_by_username(self, username: str) -> User | None:
+        """Return a user by username, or None."""
+
+    @abstractmethod
+    def count(self) -> int:
+        """Number of users, used to bootstrap the first account."""
+
+
+class UserAlreadyExists(Exception):
+    """Raised when registering a username that already exists."""
 
 
 class FirmwareRepository(ABC):
