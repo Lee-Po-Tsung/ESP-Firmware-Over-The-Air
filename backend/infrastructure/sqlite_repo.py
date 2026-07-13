@@ -66,6 +66,10 @@ class SqliteUserRepository(UserRepository):
         self._session.refresh(row)
         return _to_user(row)
 
+    def get_by_id(self, user_id: int) -> User | None:
+        row = self._session.get(UserRow, user_id)
+        return _to_user(row) if row else None
+
     def get_by_username(self, username: str) -> User | None:
         row = self._session.scalar(select(UserRow).where(UserRow.username == username))
         return _to_user(row) if row else None
