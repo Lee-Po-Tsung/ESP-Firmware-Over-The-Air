@@ -30,6 +30,17 @@ uv run uvicorn main:app --app-dir backend --host 0.0.0.0 --reload \
 
 `--host 0.0.0.0` makes the server reachable from the device over the LAN; the default `127.0.0.1` only accepts local connections. The device dials the `https://` URL in its `config.json`, so the SSL flags are required.
 
+## Frontend (Dashboard) Setup
+
+```bash
+cd frontend
+npm install
+cp .env.example .env.local   # set VITE_BACKEND to your running server's URL
+npm run dev
+```
+
+The dev server proxies `/backend/*` to `VITE_BACKEND` (see `vite.config.ts`), so the backend above must already be running and reachable at that URL.
+
 ## Client-Side ESP32 Configuration
 
 Prepare the configuration structure in `data/config.json`:
