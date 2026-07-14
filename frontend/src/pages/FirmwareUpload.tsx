@@ -1,7 +1,9 @@
 import React, { useRef, useState } from 'react';
+import { useAuth } from '../auth/context';
 import './FirmwareUpload.css';
 
 export default function FirmwareUpload() {
+  const { session } = useAuth();
   const formRef = useRef<HTMLFormElement>(null);
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -20,9 +22,18 @@ export default function FirmwareUpload() {
     try {
       const res = await fetch('/backend/firmware/upload', {
         method: 'POST',
+        headers: session ? { Authorization: `Bearer ${session.token}` } : undefined,
         body: new FormData(form),
       });
 
+      if (res.status === 401) {
+        setMessage('Session expired. Please log in again.');
+        return;
+      }
+      if (res.status === 403) {
+        setMessage('Only admin accounts can upload firmware.');
+        return;
+      }
       if (!res.ok) {
         setMessage(`Upload failed (HTTP ${res.status})`);
         return;
@@ -60,9 +71,6 @@ export default function FirmwareUpload() {
               <input type="text" name="version" placeholder="hint" required />
             </label>
           </div>
-
-          {/* Admin auth moves to a bearer token from login in M3; the shared
-              admin key was removed in M2. */}
 
           <div className="form-group">
             <label>
