@@ -9,10 +9,25 @@ local-dev defaults. The SQLite database and uploaded firmware live under
 from __future__ import annotations
 
 import os
-from functools import lru_cache
+from functools import cached_property, lru_cache
 from pathlib import Path
 
+from dotenv import load_dotenv
+
+# Load a local `.env` (repo root or backend/) into the environment before any
+# setting is read. Real values live there; the repo only ships `.env.example`.
+load_dotenv(Path(__file__).resolve().parent / ".env")
+load_dotenv()
+
 BACKEND_DIR = Path(__file__).resolve().parent
+
+
+def _require_env(name: str) -> str:
+    """Read a mandatory secret from the environment, failing loudly if unset."""
+    value = os.environ.get(name)
+    if not value:
+        raise RuntimeError(f"{name} is not set. Copy backend/.env.example to backend/.env.")
+    return value
 
 
 class Settings:
@@ -29,8 +44,20 @@ class Settings:
             os.environ.get("PUBLIC_KEY_PATH", self.keys_dir / "public_key.pem")
         )
 
-        # Shared admin key gating uploads — replaced by real auth in M2.
-        self.admin_key = os.environ.get("ADMIN_KEY", "super_secret_admin_key")
+        self.jwt_expires_minutes = int(os.environ.get("JWT_EXPIRES_MINUTES", "60"))
+
+    @cached_property
+    def jwt_secret(self) -> str:
+        # No fallback secret on purpose: a hardcoded default is exactly the
+        # shared-admin-key mistake M2 removes. Read lazily so key generation,
+        # TLS certs and alembic run before .env exists; anything touching auth
+        # still fails loudly. The server checks it at boot in main.py.
+        secret = _require_env("JWT_SECRET")
+        # HS256 needs a 256-bit key (RFC 7518); anything shorter makes admin
+        # tokens brute-forceable, so refuse to run rather than warn.
+        if len(secret.encode("utf-8")) < 32:
+            raise RuntimeError("JWT_SECRET must be at least 32 bytes. See backend/.env.example.")
+        return secret
 
     @property
     def database_url(self) -> str:

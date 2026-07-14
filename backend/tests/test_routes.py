@@ -1,8 +1,6 @@
 """HTTP-level tests for the device protocol and read-only routes.
 
-Deliberately skips `/firmware/upload`: it sits behind `require_admin_key`,
-which is a shared-secret shim slated for replacement by real auth in M2 (see
-docs/ROADMAP.md), so it isn't worth covering here.
+The admin gate on `/firmware/upload` is covered in `test_auth_routes.py`.
 """
 
 from __future__ import annotations

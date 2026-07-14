@@ -1,9 +1,14 @@
 from __future__ import annotations
 
 import pytest
-from domain.models import Device, Firmware
+from domain.models import Device, Firmware, Role, User
 from infrastructure.db import Base
-from infrastructure.sqlite_repo import SqliteDeviceRepository, SqliteFirmwareRepository
+from infrastructure.sqlite_repo import (
+    SqliteDeviceRepository,
+    SqliteFirmwareRepository,
+    SqliteUserRepository,
+)
+from ports.repository import UserAlreadyExists
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
@@ -96,3 +101,33 @@ def test_get_by_device_id_returns_none_when_missing(session):
     repo = SqliteDeviceRepository(session)
 
     assert repo.get_by_device_id("unknown") is None
+
+
+def make_user(username="alice", role=Role.OPERATOR) -> User:
+    return User(username=username, password_hash="hash", role=role)
+
+
+def test_user_add_assigns_id_and_round_trips(session):
+    repo = SqliteUserRepository(session)
+
+    added = repo.add(make_user(role=Role.ADMIN))
+
+    assert added.id is not None
+    fetched = repo.get_by_username("alice")
+    assert fetched == added
+    assert fetched.role is Role.ADMIN
+    assert repo.get_by_id(added.id) == added
+
+
+def test_user_add_rejects_duplicate_username(session):
+    repo = SqliteUserRepository(session)
+    repo.add(make_user())
+
+    with pytest.raises(UserAlreadyExists):
+        repo.add(make_user())
+
+
+def test_get_user_by_username_returns_none_when_missing(session):
+    repo = SqliteUserRepository(session)
+
+    assert repo.get_by_username("nobody") is None

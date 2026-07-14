@@ -100,7 +100,7 @@ stack.
 
 ---
 
-## M2 — Auth & Roles (minimal)
+## M2 — Auth & Roles (minimal) — Done (backend; frontend JWT wiring lands in M3)
 
 **Title:** `M2 — Auth & Roles`
 
@@ -108,13 +108,14 @@ stack.
 Replace the shared admin key with real accounts. Keep it simple; defer anything
 fancy.
 
-- User registration and login with bcrypt-hashed passwords
-- JWT access token only for now; refresh-token rotation is deferred to M6
-- Two roles: `Admin` and `Operator`
-- Put the upload and delete endpoints behind admin auth; remove the shared admin
-  key from the codebase and config
-- Move every secret and hostname into `.env`; nothing hardcoded
-- Write tests for the auth flow **(good first task)**
+- [x] User registration and login with bcrypt-hashed passwords
+- [x] JWT access token only for now; refresh-token rotation is deferred to M6
+- [x] Two roles: `Admin` and `Operator`
+- [x] Put the upload endpoint behind admin auth; remove the shared admin key from
+      the codebase and config (no delete endpoint exists yet — `require_admin` is
+      ready for it when it lands)
+- [x] Move every secret into `.env`; `JWT_SECRET` has no hardcoded fallback
+- [x] Write tests for the auth flow **(good first task)**
 
 **Done when:** Only a logged-in admin can upload firmware, and the shared admin
 key no longer exists anywhere in the repo.

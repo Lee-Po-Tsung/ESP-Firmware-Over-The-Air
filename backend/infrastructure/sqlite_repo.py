@@ -6,12 +6,18 @@ each table row to and from the domain dataclasses.
 
 from __future__ import annotations
 
-from domain.models import Device, Firmware
-from ports.repository import DeviceRepository, FirmwareRepository
+from domain.models import Device, Firmware, Role, User
+from ports.repository import (
+    DeviceRepository,
+    FirmwareRepository,
+    UserAlreadyExists,
+    UserRepository,
+)
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from infrastructure.db import DeviceRow, FirmwareRow
+from infrastructure.db import DeviceRow, FirmwareRow, UserRow
 
 
 def _version_key(version: str) -> list[int]:
@@ -29,6 +35,44 @@ def _to_firmware(row: FirmwareRow) -> Firmware:
         sha256=row.sha256,
         created_at=row.created_at,
     )
+
+
+def _to_user(row: UserRow) -> User:
+    return User(
+        id=row.id,
+        username=row.username,
+        password_hash=row.password_hash,
+        role=Role(row.role),
+        created_at=row.created_at,
+    )
+
+
+class SqliteUserRepository(UserRepository):
+    def __init__(self, session: Session) -> None:
+        self._session = session
+
+    def add(self, user: User) -> User:
+        row = UserRow(
+            username=user.username,
+            password_hash=user.password_hash,
+            role=user.role.value,
+        )
+        self._session.add(row)
+        try:
+            self._session.commit()
+        except IntegrityError as exc:
+            self._session.rollback()
+            raise UserAlreadyExists(user.username) from exc
+        self._session.refresh(row)
+        return _to_user(row)
+
+    def get_by_id(self, user_id: int) -> User | None:
+        row = self._session.get(UserRow, user_id)
+        return _to_user(row) if row else None
+
+    def get_by_username(self, username: str) -> User | None:
+        row = self._session.scalar(select(UserRow).where(UserRow.username == username))
+        return _to_user(row) if row else None
 
 
 class SqliteFirmwareRepository(FirmwareRepository):

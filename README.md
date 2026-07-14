@@ -16,9 +16,17 @@ uv run python backend/scripts/generate_tls_cert.py <your-lan-ip>
 
 # Create the database schema
 uv run alembic -c backend/alembic.ini upgrade head
+
+# Configure secrets, then create the first admin account
+cp backend/.env.example backend/.env   # set JWT_SECRET to a strong random value
+uv run python backend/scripts/create_user.py --username admin --role admin
 ```
 
-The SQLite database and firmware binaries live under `backend/data/`; the keys under `backend/keys/`. Both are git-ignored.
+The SQLite database and firmware binaries live under `backend/data/`; the keys under `backend/keys/`. Both are git-ignored, as is `backend/.env`.
+
+## Accounts and Auth
+
+Dashboard access uses accounts with two roles: `admin` (can publish firmware) and `operator` (read-only for now). Log in at `POST /api/auth/login` to get a JWT; send it as `Authorization: Bearer <token>` on protected endpoints. Self-signup at `POST /api/auth/register` creates an operator; seed admins with `scripts/create_user.py`. The device endpoints (`/api/check`, `/api/download`) stay unauthenticated.
 
 ### Run
 
@@ -78,15 +86,23 @@ arduino-cli compile --fqbn esp32:esp32:esp32s3 --board-options "PartitionScheme=
   ```bash
   arduino-cli compile --fqbn esp32:esp32:esp32s3 --board-options "PartitionScheme=custom,CDCOnBoot=cdc" --output-dir build_out esp32/main
   ```
-- Upload the binary via the `frontend/` web app, or programmatically:
+- Upload the binary via the `frontend/` web app, or programmatically. Log in as an
+  admin first, then send the token as a bearer header:
   ```python
   import requests
+  base = 'https://YOUR_SERVER_IP:8000'
+  token = requests.post(
+      f'{base}/api/auth/login', json={'username': 'admin', 'password': '...'}
+  ).json()['access_token']
   files = {'firmware': ('main.ino.bin', open('build_out/main.ino.bin', 'rb'))}
-  data = {'model': 'ESP32', 'version': '1.0.1', 'admin_key': 'super_secret_admin_key'}
-  requests.post('https://YOUR_SERVER_IP:8000/firmware/upload', files=files, data=data)
+  data = {'model': 'ESP32', 'version': '1.0.1'}
+  requests.post(
+      f'{base}/firmware/upload', files=files, data=data,
+      headers={'Authorization': f'Bearer {token}'},
+  )
   ```
 
 ## Scope Notes
 
-- Real auth (replacing the shared admin key) lands in M2.
+- Frontend login is still visual only; wiring the JWT into the dashboard (and the upload form) lands in M3.
 - Local dev serves HTTPS with the self-signed cert from `generate_tls_cert.py` (the device pins it as its CA). Production TLS via a reverse proxy with automatic certificates (Caddy) arrives at M5.
