@@ -52,7 +52,12 @@ class Settings:
         # shared-admin-key mistake M2 removes. Read lazily so key generation,
         # TLS certs and alembic run before .env exists; anything touching auth
         # still fails loudly. The server checks it at boot in main.py.
-        return _require_env("JWT_SECRET")
+        secret = _require_env("JWT_SECRET")
+        # HS256 needs a 256-bit key (RFC 7518); anything shorter makes admin
+        # tokens brute-forceable, so refuse to run rather than warn.
+        if len(secret.encode("utf-8")) < 32:
+            raise RuntimeError("JWT_SECRET must be at least 32 bytes. See backend/.env.example.")
+        return secret
 
     @property
     def database_url(self) -> str:

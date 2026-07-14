@@ -21,6 +21,14 @@ def test_settings_constructs_without_jwt_secret(monkeypatch):
 
 
 def test_jwt_secret_read_from_env(monkeypatch):
-    monkeypatch.setenv("JWT_SECRET", "from-env")
+    secret = "from-env-0123456789abcdefghijklmnopqrstuv"
+    monkeypatch.setenv("JWT_SECRET", secret)
 
-    assert Settings().jwt_secret == "from-env"
+    assert Settings().jwt_secret == secret
+
+
+def test_jwt_secret_rejects_short_value(monkeypatch):
+    monkeypatch.setenv("JWT_SECRET", "too-short")
+
+    with pytest.raises(RuntimeError, match="32 bytes"):
+        _ = Settings().jwt_secret

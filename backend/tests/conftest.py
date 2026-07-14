@@ -13,4 +13,5 @@ import os
 import tempfile
 
 os.environ.setdefault("DATA_DIR", tempfile.mkdtemp(prefix="ota-test-data-"))
-os.environ.setdefault("JWT_SECRET", "test-secret-not-for-production")
+# 32+ bytes: config enforces RFC 7518's minimum HMAC key length for HS256.
+os.environ.setdefault("JWT_SECRET", "test-secret-not-for-production-padded-to-length")
