@@ -1,11 +1,14 @@
 import './App.css'
-import { Routes, Route, Link, useLocation } from 'react-router'
+import { Routes, Route, Link, Navigate, useLocation } from 'react-router'
+import type { ReactNode } from 'react';
 import FirmwareList from './pages/FirmwareList';
 import FirmwareUpload from './pages/FirmwareUpload';
 import Login from './pages/Login';
+import { useAuth } from './auth/context';
 
 function Header() {
   const { pathname } = useLocation();
+  const { session, logout } = useAuth();
   const showBack = pathname === '/upload' || pathname === '/login';
 
   return (
@@ -23,13 +26,31 @@ function Header() {
         )}
 
         <div className="header-auth">
-          <Link to="/login" className="auth-btn login-btn">
-            Login
-          </Link>
+          {session ? (
+            <>
+              <span className="header-user">
+                {session.username}
+                <span className="header-role">{session.role}</span>
+              </span>
+              <button type="button" className="auth-btn logout-btn" onClick={logout}>
+                Logout
+              </button>
+            </>
+          ) : (
+            <Link to="/login" className="auth-btn login-btn">
+              Login
+            </Link>
+          )}
         </div>
       </div>
     </header>
   );
+}
+
+// Upload needs a bearer token, so send visitors through login first.
+function RequireAuth({ children }: { children: ReactNode }) {
+  const { session } = useAuth();
+  return session ? children : <Navigate to="/login" replace />;
 }
 
 function App() {
@@ -38,7 +59,14 @@ function App() {
       <Header />
       <Routes>
         <Route index element={<FirmwareList />} />
-        <Route path="/upload" element={<FirmwareUpload />} />
+        <Route
+          path="/upload"
+          element={
+            <RequireAuth>
+              <FirmwareUpload />
+            </RequireAuth>
+          }
+        />
         <Route path="/login" element={<Login />} />
       </Routes>
     </>
