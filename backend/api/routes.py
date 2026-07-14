@@ -19,7 +19,7 @@ from application.auth import AuthenticateUser, InvalidCredentials, RegisterUser,
 from application.check_update import CheckUpdate, ModelNotFound
 from application.upload_firmware import UploadFirmware, UploadFirmwareRequest
 from domain.auth import MAX_PASSWORD_BYTES
-from domain.models import Firmware, User
+from domain.models import Firmware
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from fastapi.responses import Response
 from ports.repository import FirmwareRepository, UserAlreadyExists
@@ -158,13 +158,14 @@ Admin firmware upload
 """
 
 
-@router.post("/firmware/upload", include_in_schema=False)
+# Decorator-level dependencies resolve before parameter ones, so the admin
+# gate runs before get_upload_firmware touches the signing key on disk.
+@router.post("/firmware/upload", include_in_schema=False, dependencies=[Depends(require_admin)])
 def upload(
     model: str = Form(...),
     version: str = Form(...),
     firmware: UploadFile = File(...),
     use_case: UploadFirmware = Depends(get_upload_firmware),
-    _admin: User = Depends(require_admin),
 ) -> dict:
     timestamp = datetime.datetime.now().strftime("%y%m%d_%H%M%S")
     data = firmware.file.read()
