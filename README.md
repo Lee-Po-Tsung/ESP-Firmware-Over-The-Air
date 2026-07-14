@@ -104,5 +104,5 @@ arduino-cli compile --fqbn esp32:esp32:esp32s3 --board-options "PartitionScheme=
 
 ## Scope Notes
 
-- Frontend login is still visual only; wiring the JWT into the dashboard (and the upload form) lands in M3.
+- The dashboard login/register forms carry the JWT in memory only; a page reload drops the session, and refresh tokens are deferred to M6. The device page (device list, last-seen) is the remaining M3 item.
 - Local dev serves HTTPS with the self-signed cert from `generate_tls_cert.py` (the device pins it as its CA). Production TLS via a reverse proxy with automatic certificates (Caddy) arrives at M5.
