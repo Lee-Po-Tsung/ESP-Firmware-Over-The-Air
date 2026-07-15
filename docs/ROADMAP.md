@@ -136,7 +136,7 @@ more.
       sends the bearer token and /upload requires login first. Google/GitHub
       OAuth stays stripped out until it has a real session story behind it
 - [x] Firmware page: list of versions per model, plus an upload form
-- [ ] Device page: list of devices with current version and last-seen time
+- [x] Device page: list of devices with current version and last-seen time
 - Deliberately out of scope here: fleet charts, audit log, user management
 - A Playwright end-to-end test for the upload flow **(good first task)**
 
