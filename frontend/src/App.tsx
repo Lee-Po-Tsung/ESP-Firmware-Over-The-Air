@@ -1,6 +1,7 @@
 import './App.css'
 import { Routes, Route, Link, Navigate, useLocation } from 'react-router'
 import type { ReactNode } from 'react';
+import DeviceList from './pages/DeviceList';
 import FirmwareList from './pages/FirmwareList';
 import FirmwareUpload from './pages/FirmwareUpload';
 import Login from './pages/Login';
@@ -9,7 +10,7 @@ import { useAuth } from './auth/context';
 function Header() {
   const { pathname } = useLocation();
   const { session, logout } = useAuth();
-  const showBack = pathname === '/upload' || pathname === '/login';
+  const showBack = pathname === '/upload' || pathname === '/login' || pathname === '/devices';
 
   return (
     <header className="app-header">
@@ -64,6 +65,14 @@ function App() {
           element={
             <RequireAuth>
               <FirmwareUpload />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/devices"
+          element={
+            <RequireAuth>
+              <DeviceList />
             </RequireAuth>
           }
         />
