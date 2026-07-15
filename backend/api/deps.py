@@ -19,8 +19,12 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from infrastructure.db import SessionLocal
 from infrastructure.local_storage import LocalStorage
-from infrastructure.sqlite_repo import SqliteFirmwareRepository, SqliteUserRepository
-from ports.repository import FirmwareRepository, UserRepository
+from infrastructure.sqlite_repo import (
+    SqliteDeviceRepository,
+    SqliteFirmwareRepository,
+    SqliteUserRepository,
+)
+from ports.repository import DeviceRepository, FirmwareRepository, UserRepository
 from ports.storage import StorageBackend
 from sqlalchemy.orm import Session
 
@@ -43,14 +47,19 @@ def get_user_repository(db: Session = Depends(get_db)) -> UserRepository:
     return SqliteUserRepository(db)
 
 
+def get_device_repository(db: Session = Depends(get_db)) -> DeviceRepository:
+    return SqliteDeviceRepository(db)
+
+
 def get_storage(settings: Settings = Depends(get_settings)) -> StorageBackend:
     return LocalStorage(settings.firmware_dir)
 
 
 def get_check_update(
     repo: FirmwareRepository = Depends(get_firmware_repository),
+    devices: DeviceRepository = Depends(get_device_repository),
 ) -> CheckUpdate:
-    return CheckUpdate(repo)
+    return CheckUpdate(repo, devices)
 
 
 def get_upload_firmware(

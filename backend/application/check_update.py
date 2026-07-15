@@ -2,14 +2,18 @@
 
 Given a device's model and its current version, finds the latest firmware for
 that model and returns its download details only when it is strictly newer.
+A check-in that carries a device id is also recorded, which is what feeds the
+dashboard's device page.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime, timezone
 
 from domain import signing
-from ports.repository import FirmwareRepository
+from domain.models import Device
+from ports.repository import DeviceRepository, FirmwareRepository
 
 
 @dataclass
@@ -26,10 +30,25 @@ class ModelNotFound(Exception):
 
 
 class CheckUpdate:
-    def __init__(self, repository: FirmwareRepository) -> None:
+    def __init__(self, repository: FirmwareRepository, devices: DeviceRepository) -> None:
         self._repo = repository
+        self._devices = devices
 
-    def execute(self, model: str, current_version: str) -> CheckUpdateResult:
+    def execute(
+        self, model: str, current_version: str, device_id: str | None = None
+    ) -> CheckUpdateResult:
+        # Record the check-in before the firmware lookup, so devices whose
+        # model has no published firmware yet still appear on the device page.
+        if device_id:
+            self._devices.upsert(
+                Device(
+                    device_id=device_id,
+                    model=model,
+                    current_version=current_version,
+                    last_seen=datetime.now(timezone.utc),
+                )
+            )
+
         latest = self._repo.get_latest_for_model(model)
         if latest is None:
             raise ModelNotFound(model)
