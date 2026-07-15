@@ -131,10 +131,10 @@ The smallest web UI someone would actually pay to use. Three screens, nothing
 more.
 
 - [x] React with TypeScript and Vite, styled with shadcn/ui
-- [x] Login page scaffolded (visual only for now); Google/GitHub OAuth was
-      prototyped directly against the backend, then stripped back out since it
-      had no real session/JWT behind it — wire it up properly once M2 lands,
-      keeping the JWT in memory, not localStorage
+- [x] Login and register pages wired to the backend JWT; the token lives in
+      memory only (a reload drops the session; refresh tokens are M6). Upload
+      sends the bearer token and /upload requires login first. Google/GitHub
+      OAuth stays stripped out until it has a real session story behind it
 - [x] Firmware page: list of versions per model, plus an upload form
 - [ ] Device page: list of devices with current version and last-seen time
 - Deliberately out of scope here: fleet charts, audit log, user management
