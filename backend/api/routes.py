@@ -113,7 +113,7 @@ def check_update(
     use_case: CheckUpdate = Depends(get_check_update),
 ) -> dict:
     try:
-        result = use_case.execute(body.model, body.version)
+        result = use_case.execute(body.model, body.version, body.device_id)
     except ModelNotFound as exc:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN) from exc
 

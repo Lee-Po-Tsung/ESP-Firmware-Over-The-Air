@@ -8,9 +8,21 @@ from __future__ import annotations
 import pytest
 from api.deps import get_check_update, get_firmware_repository, get_storage
 from application.check_update import CheckUpdate
-from domain.models import Firmware
+from domain.models import Device, Firmware
 from fastapi.testclient import TestClient
 from main import app
+
+
+class FakeDeviceRepository:
+    def __init__(self) -> None:
+        self.devices: dict[str, Device] = {}
+
+    def get_by_device_id(self, device_id: str) -> Device | None:
+        return self.devices.get(device_id)
+
+    def upsert(self, device: Device) -> Device:
+        self.devices[device.device_id] = device
+        return device
 
 
 class FakeFirmwareRepository:
@@ -68,7 +80,9 @@ def client():
 
 
 def test_check_update_returns_403_for_unknown_model(client):
-    app.dependency_overrides[get_check_update] = lambda: CheckUpdate(FakeFirmwareRepository())
+    app.dependency_overrides[get_check_update] = lambda: CheckUpdate(
+        FakeFirmwareRepository(), FakeDeviceRepository()
+    )
 
     response = client.post("/api/check", json={"model": "ESP32", "version": "1.0.0"})
 
@@ -78,7 +92,7 @@ def test_check_update_returns_403_for_unknown_model(client):
 def test_check_update_reports_no_update_when_current_is_latest(client):
     latest = make_firmware(version="1.0.0")
     app.dependency_overrides[get_check_update] = lambda: CheckUpdate(
-        FakeFirmwareRepository(firmware_by_model={"ESP32": latest})
+        FakeFirmwareRepository(firmware_by_model={"ESP32": latest}), FakeDeviceRepository()
     )
 
     response = client.post("/api/check", json={"model": "ESP32", "version": "1.0.0"})
@@ -90,7 +104,7 @@ def test_check_update_reports_no_update_when_current_is_latest(client):
 def test_check_update_reports_available_update_with_download_url(client):
     latest = make_firmware(version="1.2.0", firmware_id=42)
     app.dependency_overrides[get_check_update] = lambda: CheckUpdate(
-        FakeFirmwareRepository(firmware_by_model={"ESP32": latest})
+        FakeFirmwareRepository(firmware_by_model={"ESP32": latest}), FakeDeviceRepository()
     )
 
     response = client.post(
@@ -105,6 +119,18 @@ def test_check_update_reports_available_update_with_download_url(client):
         "signature": "c2ln",
         "download_url": "/api/download/42",
     }
+
+
+def test_check_update_records_device_checkin(client):
+    latest = make_firmware(version="1.2.0", firmware_id=42)
+    devices = FakeDeviceRepository()
+    app.dependency_overrides[get_check_update] = lambda: CheckUpdate(
+        FakeFirmwareRepository(firmware_by_model={"ESP32": latest}), devices
+    )
+
+    client.post("/api/check", json={"model": "ESP32", "version": "1.1.0", "device_id": "dev-1"})
+
+    assert devices.devices["dev-1"].current_version == "1.1.0"
 
 
 def test_download_firmware_returns_404_for_unknown_id(client):
