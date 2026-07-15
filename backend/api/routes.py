@@ -5,7 +5,8 @@ Device protocol:
 - `POST /api/check`
 - `GET /api/download/{id}`
 
-plus `POST /firmware/upload` for the admin frontend to publish signed firmware.
+plus `POST /firmware/upload` for the admin frontend to publish signed firmware
+and `GET /api/devices` for the dashboard device page.
 Each handler reads the request, calls a use case, and shapes the response. Field
 names and status codes follow what the ESP32 firmware in `esp32/main/ota.cpp`
 expects.
@@ -22,13 +23,15 @@ from domain.auth import MAX_PASSWORD_BYTES
 from domain.models import Firmware
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from fastapi.responses import Response
-from ports.repository import FirmwareRepository, UserAlreadyExists
+from ports.repository import DeviceRepository, FirmwareRepository, UserAlreadyExists
 from ports.storage import StorageBackend
 from pydantic import BaseModel, Field, field_validator
 
 from api.deps import (
     get_authenticate_user,
     get_check_update,
+    get_current_user,
+    get_device_repository,
     get_firmware_repository,
     get_register_user,
     get_storage,
@@ -151,6 +154,32 @@ def firmware_list_api(
     repo: FirmwareRepository = Depends(get_firmware_repository),
 ) -> list[Firmware]:
     return repo.list_all()
+
+
+"""
+Dashboard device page
+"""
+
+
+# Fleet data (device ids are MAC addresses) stays behind a login; any role may
+# read it, matching the read-mostly Operator account.
+@router.get("/api/devices", dependencies=[Depends(get_current_user)])
+def device_list_api(repo: DeviceRepository = Depends(get_device_repository)) -> list[dict]:
+    # SQLite hands back naive datetimes; they are UTC by construction, so stamp
+    # the offset or browsers would parse the ISO string as local time.
+    def _iso_utc(dt: datetime.datetime | None) -> str | None:
+        return dt.replace(tzinfo=datetime.timezone.utc).isoformat() if dt else None
+
+    return [
+        {
+            "id": d.id,
+            "device_id": d.device_id,
+            "model": d.model,
+            "current_version": d.current_version,
+            "last_seen": _iso_utc(d.last_seen),
+        }
+        for d in repo.list_all()
+    ]
 
 
 """

@@ -5,12 +5,24 @@ The admin gate on `/firmware/upload` is covered in `test_auth_routes.py`.
 
 from __future__ import annotations
 
+from datetime import datetime
+
 import pytest
-from api.deps import get_check_update, get_firmware_repository, get_storage
+from api.deps import (
+    get_check_update,
+    get_current_user,
+    get_device_repository,
+    get_firmware_repository,
+    get_storage,
+)
 from application.check_update import CheckUpdate
-from domain.models import Device, Firmware
+from domain.models import Device, Firmware, Role, User
 from fastapi.testclient import TestClient
 from main import app
+
+
+def make_operator() -> User:
+    return User(username="op", password_hash="x", role=Role.OPERATOR, id=1)
 
 
 class FakeDeviceRepository:
@@ -23,6 +35,9 @@ class FakeDeviceRepository:
     def upsert(self, device: Device) -> Device:
         self.devices[device.device_id] = device
         return device
+
+    def list_all(self) -> list[Device]:
+        return list(self.devices.values())
 
 
 class FakeFirmwareRepository:
@@ -182,3 +197,37 @@ def test_firmware_list_api_returns_all_firmware_as_json(client):
     assert response.status_code == 200
     assert response.json()[0]["model"] == "ESP32"
     assert response.json()[0]["id"] == 1
+
+
+def test_device_list_requires_login(client):
+    response = client.get("/api/devices")
+
+    assert response.status_code == 401
+
+
+def test_device_list_returns_devices_with_utc_last_seen(client):
+    devices = FakeDeviceRepository()
+    devices.upsert(
+        Device(
+            id=1,
+            device_id="aa:bb:cc",
+            model="ESP32",
+            current_version="1.0.0",
+            last_seen=datetime(2026, 7, 15, 12, 0, 0),
+        )
+    )
+    app.dependency_overrides[get_device_repository] = lambda: devices
+    app.dependency_overrides[get_current_user] = lambda: make_operator()
+
+    response = client.get("/api/devices")
+
+    assert response.status_code == 200
+    assert response.json() == [
+        {
+            "id": 1,
+            "device_id": "aa:bb:cc",
+            "model": "ESP32",
+            "current_version": "1.0.0",
+            "last_seen": "2026-07-15T12:00:00+00:00",
+        }
+    ]

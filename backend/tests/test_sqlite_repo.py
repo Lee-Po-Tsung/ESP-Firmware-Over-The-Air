@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import datetime
+
 import pytest
 from domain.models import Device, Firmware, Role, User
 from infrastructure.db import Base
@@ -101,6 +103,19 @@ def test_get_by_device_id_returns_none_when_missing(session):
     repo = SqliteDeviceRepository(session)
 
     assert repo.get_by_device_id("unknown") is None
+
+
+def test_device_list_all_orders_most_recently_seen_first(session):
+    repo = SqliteDeviceRepository(session)
+    older = datetime(2026, 7, 1, 12, 0, 0)
+    newer = datetime(2026, 7, 2, 12, 0, 0)
+    repo.upsert(Device(device_id="dev-old", model="ESP32", last_seen=older))
+    repo.upsert(Device(device_id="dev-new", model="ESP32", last_seen=newer))
+    repo.upsert(Device(device_id="dev-never", model="ESP32", last_seen=None))
+
+    listed = repo.list_all()
+
+    assert [d.device_id for d in listed] == ["dev-new", "dev-old", "dev-never"]
 
 
 def make_user(username="alice", role=Role.OPERATOR) -> User:

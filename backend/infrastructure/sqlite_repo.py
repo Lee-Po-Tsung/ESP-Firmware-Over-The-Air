@@ -37,6 +37,16 @@ def _to_firmware(row: FirmwareRow) -> Firmware:
     )
 
 
+def _to_device(row: DeviceRow) -> Device:
+    return Device(
+        id=row.id,
+        device_id=row.device_id,
+        model=row.model,
+        current_version=row.current_version,
+        last_seen=row.last_seen,
+    )
+
+
 def _to_user(row: UserRow) -> User:
     return User(
         id=row.id,
@@ -116,15 +126,7 @@ class SqliteDeviceRepository(DeviceRepository):
 
     def get_by_device_id(self, device_id: str) -> Device | None:
         row = self._session.scalar(select(DeviceRow).where(DeviceRow.device_id == device_id))
-        if not row:
-            return None
-        return Device(
-            id=row.id,
-            device_id=row.device_id,
-            model=row.model,
-            current_version=row.current_version,
-            last_seen=row.last_seen,
-        )
+        return _to_device(row) if row else None
 
     def upsert(self, device: Device) -> Device:
         row = self._session.scalar(select(DeviceRow).where(DeviceRow.device_id == device.device_id))
@@ -136,10 +138,11 @@ class SqliteDeviceRepository(DeviceRepository):
         row.last_seen = device.last_seen
         self._session.commit()
         self._session.refresh(row)
-        return Device(
-            id=row.id,
-            device_id=row.device_id,
-            model=row.model,
-            current_version=row.current_version,
-            last_seen=row.last_seen,
-        )
+        return _to_device(row)
+
+    def list_all(self) -> list[Device]:
+        # SQLite sorts NULL as smallest, so never-seen devices land last on desc.
+        rows = self._session.scalars(
+            select(DeviceRow).order_by(DeviceRow.last_seen.desc(), DeviceRow.id.desc())
+        ).all()
+        return [_to_device(r) for r in rows]

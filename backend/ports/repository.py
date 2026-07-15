@@ -59,3 +59,7 @@ class DeviceRepository(ABC):
     @abstractmethod
     def upsert(self, device: Device) -> Device:
         """Insert or update a device check-in record."""
+
+    @abstractmethod
+    def list_all(self) -> list[Device]:
+        """Return every device, most recently seen first (for the device page)."""
