@@ -53,8 +53,6 @@ class RegisterRequest(BaseModel):
     @field_validator("password")
     @classmethod
     def _fits_bcrypt(cls, v: str) -> str:
-        # Byte length, not char count: bcrypt rejects >72 bytes and multi-byte
-        # UTF-8 passwords hit that well under 72 characters.
         if len(v.encode("utf-8")) > MAX_PASSWORD_BYTES:
             raise ValueError(f"password must be at most {MAX_PASSWORD_BYTES} bytes")
         return v
@@ -149,7 +147,7 @@ def download_firmware(
     )
 
 
-@router.get("/api/firmware/list")
+@router.get("/api/firmware/list", dependencies=[Depends(get_current_user)])
 def firmware_list_api(
     repo: FirmwareRepository = Depends(get_firmware_repository),
 ) -> list[Firmware]:
@@ -161,8 +159,6 @@ Dashboard device page
 """
 
 
-# Fleet data (device ids are MAC addresses) stays behind a login; any role may
-# read it, matching the read-mostly Operator account.
 @router.get("/api/devices", dependencies=[Depends(get_current_user)])
 def device_list_api(repo: DeviceRepository = Depends(get_device_repository)) -> list[dict]:
     # SQLite hands back naive datetimes; they are UTC by construction, so stamp
@@ -187,8 +183,7 @@ Admin firmware upload
 """
 
 
-# Decorator-level dependencies resolve before parameter ones, so the admin
-# gate runs before get_upload_firmware touches the signing key on disk.
+# Upload firmware require admin privilege
 @router.post("/firmware/upload", include_in_schema=False, dependencies=[Depends(require_admin)])
 def upload(
     model: str = Form(...),
