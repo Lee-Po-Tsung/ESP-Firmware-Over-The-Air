@@ -186,11 +186,18 @@ def test_download_firmware_returns_binary_with_expected_headers(client):
     assert firmware.filename in response.headers["content-disposition"]
 
 
+def test_firmware_list_requires_login(client):
+    response = client.get("/api/firmware/list")
+
+    assert response.status_code == 401
+
+
 def test_firmware_list_api_returns_all_firmware_as_json(client):
     firmware = make_firmware(firmware_id=1)
     app.dependency_overrides[get_firmware_repository] = lambda: FakeFirmwareRepository(
         all_firmware=[firmware]
     )
+    app.dependency_overrides[get_current_user] = lambda: make_operator()
 
     response = client.get("/api/firmware/list")
 
