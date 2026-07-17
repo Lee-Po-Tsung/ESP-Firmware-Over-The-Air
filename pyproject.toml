@@ -25,6 +25,7 @@ dev = [
     "clang-format>=19.0.0",
     "pytest>=8.0.0",
     "httpx>=0.28.1",
+    "editorconfig-checker>=3.6.1",
 ]
 
 [tool.pytest.ini_options]
