@@ -26,3 +26,6 @@ jobs:
           find esp32 -name '*.c' -o -name '*.cc' -o -name '*.cpp' \
                      -o -name '*.h' -o -name '*.hpp' -o -name '*.ino' | \
             xargs -r uv run clang-format --dry-run --Werror
+
+      - name: editorconfig-checker
+        run: uv run ec

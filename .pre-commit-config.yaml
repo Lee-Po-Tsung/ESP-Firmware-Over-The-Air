@@ -29,3 +29,9 @@ repos:
         entry: uv run clang-format -i
         language: system
         files: ^esp32/.*\.(c|cc|cpp|h|hpp|ino)$
+
+      - id: editorconfig-checker
+        name: editorconfig-checker (indent/whitespace)
+        entry: uv run ec
+        language: system
+        pass_filenames: false
