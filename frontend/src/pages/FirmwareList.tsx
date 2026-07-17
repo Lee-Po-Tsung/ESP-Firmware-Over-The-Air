@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router';
+import { useAuth } from '../auth/context';
 import './FirmwareList.css';
 
 interface Firmware {
@@ -12,18 +13,22 @@ interface Firmware {
   created_at: string;
 }
 
-async function fetchFirmwares(): Promise<Firmware[]> {
-  return fetch("/backend/api/firmware/list").then(res => res.json()).then(json => json as Firmware[]);
-}
-
 export default function FirmwareList() {
+  const { session } = useAuth();
   const [firmwares, setfirmwares] = useState<Firmware[]>([]);
 
   useEffect(() => {
-    fetchFirmwares()
-      .then(fws => setfirmwares(fws))
+    if (!session) return;
+    fetch('/backend/api/firmware/list', {
+      headers: { Authorization: `Bearer ${session.token}` },
+    })
+      .then(res => {
+        if (!res.ok) throw new Error(`Failed to fetch firmwares (HTTP ${res.status})`);
+        return res.json() as Promise<Firmware[]>;
+      })
+      .then(setfirmwares)
       .catch(e => console.error("Failed to fetch firmwares:", e));
-  }, []);
+  }, [session]);
 
   return (
     <div className="page-wrapper">

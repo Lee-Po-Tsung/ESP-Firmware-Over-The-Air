@@ -48,7 +48,8 @@ function Header() {
   );
 }
 
-// Upload needs a bearer token, so send visitors through login first.
+// Every dashboard view carries a bearer token, so send visitors through login
+// first; only the device-facing check/download endpoints are unauthenticated.
 function RequireAuth({ children }: { children: ReactNode }) {
   const { session } = useAuth();
   return session ? children : <Navigate to="/login" replace />;
@@ -59,7 +60,14 @@ function App() {
     <>
       <Header />
       <Routes>
-        <Route index element={<FirmwareList />} />
+        <Route
+          index
+          element={
+            <RequireAuth>
+              <FirmwareList />
+            </RequireAuth>
+          }
+        />
         <Route
           path="/upload"
           element={
