@@ -1,5 +1,5 @@
-# Formatters and linters run automatically before every commit. 
-# Every tool runs through uv, so the versions match uv.lock and 
+# Formatters and linters run automatically before every commit.
+# Every tool runs through uv, so the versions match uv.lock and
 # nobody needs a separate system install.
 #
 # First-time setup after cloning:
