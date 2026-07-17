@@ -149,7 +149,9 @@ def download_firmware(
     )
 
 
-@router.get("/api/firmware/list")
+# Firmware metadata (signatures, hashes) stays behind a login, matching the
+# fleet page; the unauthenticated device flow uses /api/check + /api/download.
+@router.get("/api/firmware/list", dependencies=[Depends(get_current_user)])
 def firmware_list_api(
     repo: FirmwareRepository = Depends(get_firmware_repository),
 ) -> list[Firmware]:
