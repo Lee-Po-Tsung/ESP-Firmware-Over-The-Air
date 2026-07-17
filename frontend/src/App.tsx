@@ -48,8 +48,6 @@ function Header() {
   );
 }
 
-// Every dashboard view carries a bearer token, so send visitors through login
-// first; only the device-facing check/download endpoints are unauthenticated.
 function RequireAuth({ children }: { children: ReactNode }) {
   const { session } = useAuth();
   return session ? children : <Navigate to="/login" replace />;
