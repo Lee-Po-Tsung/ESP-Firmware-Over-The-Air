@@ -62,6 +62,20 @@ def test_get_latest_for_model_picks_highest_dotted_version(session):
     assert latest.version == "1.2.10"
 
 
+def test_get_latest_for_model_breaks_version_tie_by_newest_row(session):
+    repo = SqliteFirmwareRepository(session)
+    # TODO: Duplicate (model, version) rows are not supposed to exist -- nothing
+    # enforces that yet, so old data can still hold them. Pick the highest id
+    # deterministically instead of depending on the query's row order.
+    first = repo.add(make_firmware(version="1.2.0"))
+    second = repo.add(make_firmware(version="1.2.0"))
+
+    latest = repo.get_latest_for_model("ESP32")
+
+    assert latest.id == second.id
+    assert second.id > first.id
+
+
 def test_get_latest_for_model_ignores_other_models(session):
     repo = SqliteFirmwareRepository(session)
     repo.add(make_firmware(model="ESP32", version="1.0.0"))
