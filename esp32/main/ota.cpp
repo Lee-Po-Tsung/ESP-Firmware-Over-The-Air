@@ -332,6 +332,8 @@ bool check() {
 
 // Download the firmware binary file to LittleFS
 bool downloadFirmwareToFS() {
+    if (client == nullptr) setClient();
+
     HTTPClient https;
     String url = server_url + download_path;
     https.begin(*client, url);
