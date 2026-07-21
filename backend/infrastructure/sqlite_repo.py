@@ -7,22 +7,13 @@ each table row to and from the domain dataclasses.
 from __future__ import annotations
 
 from domain.models import Device, Firmware, Role, User
-from ports.repository import (
-    DeviceRepository,
-    FirmwareRepository,
-    UserAlreadyExists,
-    UserRepository,
-)
+from domain.signing import parse_version
+from ports.repository import DeviceRepository, FirmwareRepository, UserAlreadyExists, UserRepository
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from infrastructure.db import DeviceRow, FirmwareRow, UserRow
-
-
-def _version_key(version: str) -> list[int]:
-    """Sort key matching `domain.signing.compare_version` semantics."""
-    return list(map(int, version.split(".", 2)))
 
 
 def _to_firmware(row: FirmwareRow) -> Firmware:
@@ -110,7 +101,7 @@ class SqliteFirmwareRepository(FirmwareRepository):
         rows = self._session.scalars(select(FirmwareRow).where(FirmwareRow.model == model)).all()
         if not rows:
             return None
-        latest = max(rows, key=lambda r: _version_key(r.version))
+        latest = max(rows, key=lambda r: (parse_version(r.version), r.id))
         return _to_firmware(latest)
 
     def list_all(self) -> list[Firmware]:

@@ -52,9 +52,29 @@ def sign_manifest(model: str, version: str, sha256_hex: str, private_key_pem: by
     return base64.b64encode(signature).decode("utf-8")
 
 
-def compare_version(latest_v: str, current_v: str) -> bool:
-    """Return True if `latest_v` is strictly newer than `current_v`.
+def parse_version(version: str) -> tuple[int, ...]:
+    """Parse a dotted version into a comparable tuple, mirroring the device.
 
-    Dotted integers compared as a tuple, e.g. 1.2.10 > 1.2.9.
+    Matches parseVersionSegments/isVersionNewer in esp32/main/ota.cpp. At most
+    three segments (so 1.2.3.4 truncates to 1.2.3 rather than differing from
+    the device), and parsing stops at the first empty segment.
+
+    A non-numeric or malformed segment becomes 0 instead of raising,
+    so one bad record can't crash an update check.
     """
-    return list(map(int, latest_v.split(".", 2))) > list(map(int, current_v.split(".", 2)))
+    segments: list[int] = []
+    for part in version.split(".", 2):
+        if not part:
+            break
+        digits = ""
+        for ch in part:
+            if not ch.isdigit():
+                break
+            digits += ch
+        segments.append(int(digits) if digits else 0)
+    return tuple(segments)
+
+
+def compare_version(latest_v: str, current_v: str) -> bool:
+    """Return True if `latest_v` is strictly newer than `current_v`."""
+    return parse_version(latest_v) > parse_version(current_v)

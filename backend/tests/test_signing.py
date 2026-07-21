@@ -11,6 +11,7 @@ from domain.signing import (
     calculate_sha256,
     calculate_sha256_bytes,
     compare_version,
+    parse_version,
     sign_manifest,
 )
 
@@ -88,3 +89,35 @@ def test_compare_version_shorter_segment_list_is_not_newer():
     # split(".", 2) drops trailing segments beyond the third, so a shorter
     # dotted version is a tuple-prefix of a longer one and compares as older.
     assert compare_version("1.2", "1.2.0") is False
+
+
+@pytest.mark.parametrize(
+    "version,expected",
+    [
+        ("1.2.3", (1, 2, 3)),
+        # Only three segments; the device caps at three the same way.
+        ("1.2.3.4", (1, 2, 3)),
+        # Leading digits are kept, the rest dropped, matching String::toInt.
+        ("1.0.0-rc1", (1, 0, 0)),
+        # A wholly non-numeric segment degrades to 0 rather than raising.
+        ("1.x.3", (1, 0, 3)),
+        ("abc", (0,)),
+        # Parsing stops at the first empty segment.
+        ("1..3", (1,)),
+        ("", ()),
+    ],
+)
+def test_parse_version(version, expected):
+    assert parse_version(version) == expected
+
+
+def test_compare_version_ignores_a_fourth_segment():
+    # Both collapse to (1, 2, 3), because the device only ever reads three
+    # segments. Making Python read a fourth would break that parity.
+    assert compare_version("1.2.3.5", "1.2.3.4") is False
+
+
+def test_compare_version_tolerates_malformed_without_raising():
+    # A bad record must never crash an update check; it just compares as 0s.
+    assert compare_version("1.0.1", "1.0.x") is True
+    assert compare_version("garbage", "1.0.0") is False
