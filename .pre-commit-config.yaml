@@ -1,5 +1,5 @@
-# Formatters and linters run automatically before every commit. 
-# Every tool runs through uv, so the versions match uv.lock and 
+# Formatters and linters run automatically before every commit.
+# Every tool runs through uv, so the versions match uv.lock and
 # nobody needs a separate system install.
 #
 # First-time setup after cloning:
@@ -29,3 +29,9 @@ repos:
         entry: uv run clang-format -i
         language: system
         files: ^esp32/.*\.(c|cc|cpp|h|hpp|ino)$
+
+      - id: editorconfig-checker
+        name: editorconfig-checker (indent/whitespace)
+        entry: uv run ec
+        language: system
+        pass_filenames: false
