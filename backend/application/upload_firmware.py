@@ -9,8 +9,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from domain import signing
+from domain.firmware_image import validate_image
 from domain.models import Firmware
-from ports.repository import FirmwareAlreadyExists, FirmwareRepository
+from ports.repository import (
+    FirmwareAlreadyExists,
+    FirmwareBinaryAlreadyExists,
+    FirmwareRepository,
+)
 from ports.storage import StorageBackend
 
 
@@ -35,11 +40,19 @@ class UploadFirmware:
         self._private_key_pem = private_key_pem
 
     def execute(self, req: UploadFirmwareRequest) -> Firmware:
-        filename = f"{req.timestamp}_{req.original_filename}"
-
-        self._storage.put(filename, req.data)
+        validate_image(req.data)
 
         sha256_hex = signing.calculate_sha256_bytes(req.data)
+        duplicate = self._repo.get_by_sha256(req.model, sha256_hex)
+        if duplicate is not None:
+            # A device reports the FIRMWARE_VERSION compiled into its image, so
+            # the same bytes under two versions leaves it re-reporting the old
+            # one and reflashing on every check.
+            raise FirmwareBinaryAlreadyExists(req.model, duplicate.version)
+
+        filename = f"{req.timestamp}_{req.original_filename}"
+        self._storage.put(filename, req.data)
+
         signature = signing.sign_manifest(req.model, req.version, sha256_hex, self._private_key_pem)
 
         firmware = Firmware(

@@ -107,6 +107,12 @@ class SqliteFirmwareRepository(FirmwareRepository):
         row = self._session.get(FirmwareRow, firmware_id)
         return _to_firmware(row) if row else None
 
+    def get_by_sha256(self, model: str, sha256: str) -> Firmware | None:
+        row = self._session.scalar(
+            select(FirmwareRow).where(FirmwareRow.model == model, FirmwareRow.sha256 == sha256)
+        )
+        return _to_firmware(row) if row else None
+
     def get_latest_for_model(self, model: str) -> Firmware | None:
         rows = self._session.scalars(select(FirmwareRow).where(FirmwareRow.model == model)).all()
         if not rows:

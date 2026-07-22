@@ -13,10 +13,15 @@ from api.deps import get_authenticate_user, get_upload_firmware, get_user_reposi
 from application.auth import AuthenticateUser
 from config import get_settings
 from domain import auth
+from domain.firmware_image import InvalidFirmwareImage
 from domain.models import Firmware, Role, User
 from fastapi.testclient import TestClient
 from main import app
-from ports.repository import FirmwareAlreadyExists, UserAlreadyExists
+from ports.repository import (
+    FirmwareAlreadyExists,
+    FirmwareBinaryAlreadyExists,
+    UserAlreadyExists,
+)
 
 
 class FakeUserRepository:
@@ -54,6 +59,16 @@ class FakeUploadFirmware:
 class FakeUploadFirmwareTakenVersion:
     def execute(self, req) -> Firmware:
         raise FirmwareAlreadyExists(req.model, req.version)
+
+
+class FakeUploadFirmwareBadImage:
+    def execute(self, req) -> Firmware:
+        raise InvalidFirmwareImage("Not an ESP32 image: expected magic 0xE9, found 0x62")
+
+
+class FakeUploadFirmwareStoredBinary:
+    def execute(self, req) -> Firmware:
+        raise FirmwareBinaryAlreadyExists(req.model, "1.0.2")
 
 
 @pytest.fixture
@@ -186,3 +201,30 @@ def test_upload_conflicts_on_a_version_already_stored(users, client):
     )
 
     assert res.status_code == 409
+
+
+def test_upload_rejects_a_file_that_is_not_an_esp32_image(users, client):
+    users.seed("admin", "pw", Role.ADMIN)
+    app.dependency_overrides[get_upload_firmware] = lambda: FakeUploadFirmwareBadImage()
+    token = login(client, "admin", "pw")
+
+    res = client.post(
+        "/firmware/upload", files=upload_files(), headers={"Authorization": f"Bearer {token}"}
+    )
+
+    assert res.status_code == 400
+    # The route must pass the validator's message through, not flatten it.
+    assert "0xE9" in res.json()["detail"]
+
+
+def test_upload_conflicts_on_a_binary_already_stored(users, client):
+    users.seed("admin", "pw", Role.ADMIN)
+    app.dependency_overrides[get_upload_firmware] = lambda: FakeUploadFirmwareStoredBinary()
+    token = login(client, "admin", "pw")
+
+    res = client.post(
+        "/firmware/upload", files=upload_files(), headers={"Authorization": f"Bearer {token}"}
+    )
+
+    assert res.status_code == 409
+    assert "1.0.2" in res.json()["detail"]

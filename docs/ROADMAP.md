@@ -91,6 +91,17 @@ and `local_storage.py`, they write `s3_storage.py` the same way.
 - [x] Device endpoints `POST /api/check` and `GET /api/download/{id}` matching the current ESP32 protocol exactly
 - [x] Local-filesystem `StorageBackend`; firmware binaries on disk, metadata in SQLite
 - [x] Fix the two known ESP32 issues while porting: replace the hardcoded system time with SNTP, and align the version-compare logic between device and server
+- [ ] Device-side guard against a reflash loop: store the SHA-256 of the last
+      flashed image in NVS and refuse to reflash identical bytes. The server
+      rejects a binary it has already stored under another version, but it
+      cannot catch a first upload carrying the wrong version label — the device
+      then reports its compiled-in `FIRMWARE_VERSION`, gets offered the same
+      update again, and reflashes on every check until the flash wears out.
+      This is the only guard that holds without trusting the server to be right
+- [ ] One source of truth for the version: a `VERSION` file feeding both the
+      ESP32 build and the upload tooling. Today `FIRMWARE_VERSION` in `ota.cpp`
+      and the version typed into the upload form are two independent manual
+      entries, and the loop above is what their drift causes
 - [ ] Write `CONTRIBUTING.md` as warm-up **(good first task)**
 - [x] Add unit tests for the signing and version-compare logic **(good first task)** — grew to cover the application layer, `sqlite_repo`, `local_storage`, and API routes as well; ESP32-side verification is still untested
 
@@ -114,6 +125,12 @@ fancy.
 - [x] Put the upload endpoint behind admin auth; remove the shared admin key from
       the codebase and config (no delete endpoint exists yet — `require_admin` is
       ready for it when it lands)
+- [ ] Unpublish a firmware version: an `active` flag that `get_latest_for_model`
+      skips, plus an admin endpoint to clear it. Once a firmware is uploaded
+      there is currently no way to withdraw it — the only recovery is uploading
+      a higher version, which burns a version number and reflashes the fleet.
+      Upload validation only catches mistakes we predicted; this is the retreat
+      for the ones we did not
 - [x] Move every secret into `.env`; `JWT_SECRET` has no hardcoded fallback
 - [x] Write tests for the auth flow **(good first task)**
 
@@ -163,6 +180,10 @@ Turn raw check-ins into something an operator can read at a glance.
 - Rollback detection: flag a device that checks in on a lower version than its
   last recorded one
 - A summary metrics endpoint for the dashboard to read
+- Staged rollout: serve a new version to a sampled slice of a model's devices
+  before the rest. Unpublishing (M2) only helps devices that have not checked in
+  yet, and devices poll often enough that a human will rarely beat them to it —
+  a canary is what gives the retreat somewhere to retreat to
 
 **Done when:** An operator can see the live progress of a rollout and spot a
 device that rolled back.
@@ -185,6 +206,16 @@ arrives.
   the first device, upload the first firmware
 - An ESP32 provisioning guide for embedding the CA cert and public signing key
 - `CHANGELOG.md` and semantic versioning for the platform itself
+- Move the signing key off the server, or enable Secure Boot v2. The trust root
+  today is the server: it signs at upload time with a key it holds, so a stolen
+  admin account or a compromised host yields validly signed firmware. Signing in
+  the build pipeline fixes this without touching the device, which only checks
+  its embedded public key and does not care where signing happened. Secure Boot
+  v2 goes further and roots trust in eFuse — the chip supports it and the build
+  already reports `CONFIG_SECURE_BOOT_V2_RSA_SUPPORTED=y` — but burning eFuses
+  is irreversible and a mistake bricks the device permanently. No amount of
+  upload-time validation substitutes for either; those checks only catch honest
+  mistakes
 
 **Done when:** A new customer can deploy from scratch with Docker Compose,
 finish onboarding, and push an update to an ESP32 within 30 minutes.

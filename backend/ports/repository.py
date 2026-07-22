@@ -37,6 +37,18 @@ class FirmwareAlreadyExists(Exception):
     """Raised when adding a firmware whose (model, version) is already stored."""
 
 
+class FirmwareBinaryAlreadyExists(Exception):
+    """Raised when the same binary is already stored for the model under another version.
+
+    Carries the version it collided with, which is what the caller reports back.
+    """
+
+    def __init__(self, model: str, existing_version: str) -> None:
+        super().__init__(model, existing_version)
+        self.model = model
+        self.existing_version = existing_version
+
+
 class FirmwareRepository(ABC):
     @abstractmethod
     def add(self, firmware: Firmware) -> Firmware:
@@ -48,6 +60,14 @@ class FirmwareRepository(ABC):
     @abstractmethod
     def get_by_id(self, firmware_id: int) -> Firmware | None:
         """Return a firmware by primary key, or None."""
+
+    @abstractmethod
+    def get_by_sha256(self, model: str, sha256: str) -> Firmware | None:
+        """Return the firmware storing exactly these contents for the model, or None.
+
+        Scoped per model, matching how (model, version) uniqueness is scoped:
+        one binary serving two models is unusual but not an error.
+        """
 
     @abstractmethod
     def get_latest_for_model(self, model: str) -> Firmware | None:
