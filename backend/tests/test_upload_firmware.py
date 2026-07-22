@@ -8,6 +8,7 @@ from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding, rsa
 from domain import signing
 from domain.models import Firmware
+from ports.repository import FirmwareAlreadyExists
 
 
 class FakeFirmwareRepository:
@@ -29,6 +30,13 @@ class FakeFirmwareRepository:
 
     def list_all(self) -> list[Firmware]:
         raise NotImplementedError
+
+
+class RejectingFirmwareRepository(FakeFirmwareRepository):
+    """Stands in for the unique (model, version) index rejecting an add."""
+
+    def add(self, firmware: Firmware) -> Firmware:
+        raise FirmwareAlreadyExists(firmware.model, firmware.version)
 
 
 class FakeStorage:
@@ -108,3 +116,22 @@ def test_execute_records_firmware_with_matching_hash_and_verifiable_signature(ke
         padding.PSS(mgf=padding.MGF1(hashes.SHA256()), salt_length=padding.PSS.MAX_LENGTH),
         hashes.SHA256(),
     )
+
+
+def test_execute_removes_the_stored_file_when_the_version_is_taken(keypair):
+    _, private_pem = keypair
+    repo, storage = RejectingFirmwareRepository(), FakeStorage()
+    use_case = UploadFirmware(repo, storage, private_pem)
+
+    with pytest.raises(FirmwareAlreadyExists):
+        use_case.execute(
+            UploadFirmwareRequest(
+                model="ESP32",
+                version="1.0.0",
+                original_filename="firmware.bin",
+                data=b"binary contents",
+                timestamp="260101_000000",
+            )
+        )
+
+    assert storage.files == {}

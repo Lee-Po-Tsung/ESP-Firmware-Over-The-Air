@@ -16,7 +16,7 @@ from domain import auth
 from domain.models import Firmware, Role, User
 from fastapi.testclient import TestClient
 from main import app
-from ports.repository import UserAlreadyExists
+from ports.repository import FirmwareAlreadyExists, UserAlreadyExists
 
 
 class FakeUserRepository:
@@ -49,6 +49,11 @@ class FakeUploadFirmware:
         return Firmware(
             model=req.model, version=req.version, filename="f.bin", signature="s", sha256="a" * 64
         )
+
+
+class FakeUploadFirmwareTakenVersion:
+    def execute(self, req) -> Firmware:
+        raise FirmwareAlreadyExists(req.model, req.version)
 
 
 @pytest.fixture
@@ -169,3 +174,15 @@ def test_upload_succeeds_for_admin(users, client):
 
     assert res.status_code == 200
     assert res.json() == {"status": "ok"}
+
+
+def test_upload_conflicts_on_a_version_already_stored(users, client):
+    users.seed("admin", "pw", Role.ADMIN)
+    app.dependency_overrides[get_upload_firmware] = lambda: FakeUploadFirmwareTakenVersion()
+    token = login(client, "admin", "pw")
+
+    res = client.post(
+        "/firmware/upload", files=upload_files(), headers={"Authorization": f"Bearer {token}"}
+    )
+
+    assert res.status_code == 409

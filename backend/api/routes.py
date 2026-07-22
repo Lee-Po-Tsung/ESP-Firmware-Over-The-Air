@@ -23,7 +23,12 @@ from domain.auth import MAX_PASSWORD_BYTES
 from domain.models import Firmware
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from fastapi.responses import Response
-from ports.repository import DeviceRepository, FirmwareRepository, UserAlreadyExists
+from ports.repository import (
+    DeviceRepository,
+    FirmwareAlreadyExists,
+    FirmwareRepository,
+    UserAlreadyExists,
+)
 from ports.storage import StorageBackend
 from pydantic import BaseModel, Field, field_validator
 
@@ -193,13 +198,19 @@ def upload(
 ) -> dict:
     timestamp = datetime.datetime.now().strftime("%y%m%d_%H%M%S")
     data = firmware.file.read()
-    use_case.execute(
-        UploadFirmwareRequest(
-            model=model,
-            version=version,
-            original_filename=firmware.filename or "firmware.bin",
-            data=data,
-            timestamp=timestamp,
+    try:
+        use_case.execute(
+            UploadFirmwareRequest(
+                model=model,
+                version=version,
+                original_filename=firmware.filename or "firmware.bin",
+                data=data,
+                timestamp=timestamp,
+            )
         )
-    )
+    except FirmwareAlreadyExists as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Version already exists for this model",
+        ) from exc
     return {"status": "ok"}

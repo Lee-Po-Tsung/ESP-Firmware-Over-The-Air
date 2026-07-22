@@ -8,7 +8,13 @@ from __future__ import annotations
 
 from domain.models import Device, Firmware, Role, User
 from domain.signing import parse_version
-from ports.repository import DeviceRepository, FirmwareRepository, UserAlreadyExists, UserRepository
+from ports.repository import (
+    DeviceRepository,
+    FirmwareAlreadyExists,
+    FirmwareRepository,
+    UserAlreadyExists,
+    UserRepository,
+)
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -89,7 +95,11 @@ class SqliteFirmwareRepository(FirmwareRepository):
             sha256=firmware.sha256,
         )
         self._session.add(row)
-        self._session.commit()
+        try:
+            self._session.commit()
+        except IntegrityError as exc:
+            self._session.rollback()
+            raise FirmwareAlreadyExists(firmware.model, firmware.version) from exc
         self._session.refresh(row)
         return _to_firmware(row)
 
