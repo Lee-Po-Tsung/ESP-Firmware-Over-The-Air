@@ -19,12 +19,10 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    # Keep the highest id per (model, version), matching get_latest_for_model tie-break.
+    # Keep the highest id per (model, version), matching get_latest_for_model's tie-break.
     op.execute("""
         DELETE FROM firmware
-        WHERE id NOT IN (
-            SELECT MAX(id) FROM firmware GROUP BY model, version
-        )
+        WHERE id NOT IN (SELECT MAX(id) FROM firmware GROUP BY model, version)
         """)
     op.create_index("uq_firmware_model_version", "firmware", ["model", "version"], unique=True)
 
