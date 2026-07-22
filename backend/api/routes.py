@@ -20,6 +20,7 @@ from application.auth import AuthenticateUser, InvalidCredentials, RegisterUser,
 from application.check_update import CheckUpdate, ModelNotFound
 from application.upload_firmware import UploadFirmware, UploadFirmwareRequest
 from domain.auth import MAX_PASSWORD_BYTES
+from domain.firmware_image import InvalidFirmwareImage
 from domain.models import Firmware
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from fastapi.responses import Response
@@ -208,6 +209,10 @@ def upload(
                 timestamp=timestamp,
             )
         )
+    except InvalidFirmwareImage as exc:
+        # The validator's message names the field that failed, so pass it
+        # through rather than flattening every rejection into one string.
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     except FirmwareAlreadyExists as exc:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,

@@ -9,6 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from domain import signing
+from domain.firmware_image import validate_image
 from domain.models import Firmware
 from ports.repository import FirmwareAlreadyExists, FirmwareRepository
 from ports.storage import StorageBackend
@@ -35,6 +36,8 @@ class UploadFirmware:
         self._private_key_pem = private_key_pem
 
     def execute(self, req: UploadFirmwareRequest) -> Firmware:
+        validate_image(req.data)
+
         filename = f"{req.timestamp}_{req.original_filename}"
 
         self._storage.put(filename, req.data)
