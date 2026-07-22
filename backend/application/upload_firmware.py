@@ -10,7 +10,7 @@ from dataclasses import dataclass
 
 from domain import signing
 from domain.models import Firmware
-from ports.repository import FirmwareRepository
+from ports.repository import FirmwareAlreadyExists, FirmwareRepository
 from ports.storage import StorageBackend
 
 
@@ -49,4 +49,10 @@ class UploadFirmware:
             signature=signature,
             sha256=sha256_hex,
         )
-        return self._repo.add(firmware)
+        try:
+            return self._repo.add(firmware)
+        except FirmwareAlreadyExists:
+            # Delete the duplicate firmware, and raise the Exception again
+            # for `/firmware/upload`
+            self._storage.delete(filename)
+            raise

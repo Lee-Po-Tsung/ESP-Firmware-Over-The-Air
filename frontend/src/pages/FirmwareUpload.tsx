@@ -34,6 +34,10 @@ export default function FirmwareUpload() {
         setMessage('Only admin accounts can upload firmware.');
         return;
       }
+      if (res.status === 409) {
+        setMessage('That version already exists for this model. Bump the version and retry.');
+        return;
+      }
       if (!res.ok) {
         setMessage(`Upload failed (HTTP ${res.status})`);
         return;

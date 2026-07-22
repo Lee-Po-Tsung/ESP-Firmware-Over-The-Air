@@ -33,10 +33,17 @@ class UserAlreadyExists(Exception):
     """Raised when registering a username that already exists."""
 
 
+class FirmwareAlreadyExists(Exception):
+    """Raised when adding a firmware whose (model, version) is already stored."""
+
+
 class FirmwareRepository(ABC):
     @abstractmethod
     def add(self, firmware: Firmware) -> Firmware:
-        """Persist a new firmware row and return it with its assigned id."""
+        """Persist a new firmware row and return it with its assigned id.
+
+        Raises `FirmwareAlreadyExists` if that (model, version) is already stored.
+        """
 
     @abstractmethod
     def get_by_id(self, firmware_id: int) -> Firmware | None:

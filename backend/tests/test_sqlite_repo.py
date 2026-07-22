@@ -10,7 +10,7 @@ from infrastructure.sqlite_repo import (
     SqliteFirmwareRepository,
     SqliteUserRepository,
 )
-from ports.repository import UserAlreadyExists
+from ports.repository import FirmwareAlreadyExists, UserAlreadyExists
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
@@ -64,16 +64,33 @@ def test_get_latest_for_model_picks_highest_dotted_version(session):
 
 def test_get_latest_for_model_breaks_version_tie_by_newest_row(session):
     repo = SqliteFirmwareRepository(session)
-    # TODO: Duplicate (model, version) rows are not supposed to exist -- nothing
-    # enforces that yet, so old data can still hold them. Pick the highest id
-    # deterministically instead of depending on the query's row order.
-    first = repo.add(make_firmware(version="1.2.0"))
-    second = repo.add(make_firmware(version="1.2.0"))
+    # Distinct versions can still parse to the same tuple -- the parser reads at
+    # most three segments and stops at the first non-digit -- so the tie-break
+    # picks the later upload rather than depending on the query's row order.
+    first = repo.add(make_firmware(version="1.2.3"))
+    second = repo.add(make_firmware(version="1.2.3.4"))
 
     latest = repo.get_latest_for_model("ESP32")
 
     assert latest.id == second.id
     assert second.id > first.id
+
+
+def test_add_rejects_a_version_already_stored_for_the_model(session):
+    repo = SqliteFirmwareRepository(session)
+    repo.add(make_firmware(version="1.2.0"))
+
+    with pytest.raises(FirmwareAlreadyExists):
+        repo.add(make_firmware(version="1.2.0"))
+
+
+def test_add_allows_the_same_version_on_another_model(session):
+    repo = SqliteFirmwareRepository(session)
+    repo.add(make_firmware(model="ESP32", version="1.2.0"))
+
+    added = repo.add(make_firmware(model="ESP32-S3", version="1.2.0"))
+
+    assert added.id is not None
 
 
 def test_get_latest_for_model_ignores_other_models(session):

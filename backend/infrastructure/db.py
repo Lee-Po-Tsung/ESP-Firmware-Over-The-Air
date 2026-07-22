@@ -10,7 +10,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 from config import get_settings
-from sqlalchemy import DateTime, Integer, String, create_engine
+from sqlalchemy import DateTime, Index, Integer, String, create_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker
 
 
@@ -24,6 +24,9 @@ def _utcnow() -> datetime:
 
 class FirmwareRow(Base):
     __tablename__ = "firmware"
+
+    # `model|version` should all be unique index.
+    __table_args__ = (Index("uq_firmware_model_version", "model", "version", unique=True),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     model: Mapped[str] = mapped_column(String, nullable=False, index=True)
