@@ -29,9 +29,9 @@ def session():
         yield session
 
 
-def make_firmware(model="ESP32", version="1.0.0") -> Firmware:
+def make_firmware(model="ESP32", version="1.0.0", sha256="a" * 64) -> Firmware:
     return Firmware(
-        model=model, version=version, filename=f"{version}.bin", signature="sig", sha256="a" * 64
+        model=model, version=version, filename=f"{version}.bin", signature="sig", sha256=sha256
     )
 
 
@@ -91,6 +91,30 @@ def test_add_allows_the_same_version_on_another_model(session):
     added = repo.add(make_firmware(model="ESP32-S3", version="1.2.0"))
 
     assert added.id is not None
+
+
+def test_get_by_sha256_finds_a_binary_already_stored(session):
+    repo = SqliteFirmwareRepository(session)
+    added = repo.add(make_firmware(version="1.0.2", sha256="b" * 64))
+
+    found = repo.get_by_sha256("ESP32", "b" * 64)
+
+    assert found.id == added.id
+    assert found.version == "1.0.2"
+
+
+def test_get_by_sha256_returns_none_when_no_binary_matches(session):
+    repo = SqliteFirmwareRepository(session)
+    repo.add(make_firmware(sha256="b" * 64))
+
+    assert repo.get_by_sha256("ESP32", "c" * 64) is None
+
+
+def test_get_by_sha256_ignores_the_same_binary_on_another_model(session):
+    repo = SqliteFirmwareRepository(session)
+    repo.add(make_firmware(model="ESP32", sha256="b" * 64))
+
+    assert repo.get_by_sha256("ESP32-S3", "b" * 64) is None
 
 
 def test_get_latest_for_model_ignores_other_models(session):

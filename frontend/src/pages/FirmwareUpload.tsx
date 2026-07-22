@@ -34,8 +34,11 @@ export default function FirmwareUpload() {
         setMessage('Only admin accounts can upload firmware.');
         return;
       }
-      if (res.status === 409) {
-        setMessage('That version already exists for this model. Bump the version and retry.');
+      // Several distinct causes share these codes, and the backend already
+      // names which one in `detail`, so show it rather than mirroring the list.
+      if (res.status === 400 || res.status === 409) {
+        const body = await res.json().catch(() => null);
+        setMessage(body?.detail ?? `Upload failed (HTTP ${res.status})`);
         return;
       }
       if (!res.ok) {

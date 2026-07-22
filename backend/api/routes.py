@@ -27,6 +27,7 @@ from fastapi.responses import Response
 from ports.repository import (
     DeviceRepository,
     FirmwareAlreadyExists,
+    FirmwareBinaryAlreadyExists,
     FirmwareRepository,
     UserAlreadyExists,
 )
@@ -213,6 +214,11 @@ def upload(
         # The validator's message names the field that failed, so pass it
         # through rather than flattening every rejection into one string.
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    except FirmwareBinaryAlreadyExists as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"This binary was already uploaded as version {exc.existing_version}",
+        ) from exc
     except FirmwareAlreadyExists as exc:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,

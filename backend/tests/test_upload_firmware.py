@@ -17,7 +17,7 @@ from domain.firmware_image import (
     InvalidFirmwareImage,
 )
 from domain.models import Firmware
-from ports.repository import FirmwareAlreadyExists
+from ports.repository import FirmwareAlreadyExists, FirmwareBinaryAlreadyExists
 
 
 def valid_image() -> bytes:
@@ -47,6 +47,9 @@ class FakeFirmwareRepository:
     def get_by_id(self, firmware_id: int) -> Firmware | None:
         raise NotImplementedError
 
+    def get_by_sha256(self, model: str, sha256: str) -> Firmware | None:
+        return None
+
     def get_latest_for_model(self, model: str) -> Firmware | None:
         raise NotImplementedError
 
@@ -59,6 +62,15 @@ class RejectingFirmwareRepository(FakeFirmwareRepository):
 
     def add(self, firmware: Firmware) -> Firmware:
         raise FirmwareAlreadyExists(firmware.model, firmware.version)
+
+
+class StoredBinaryFirmwareRepository(FakeFirmwareRepository):
+    """Stands in for these exact contents already being on record."""
+
+    def get_by_sha256(self, model: str, sha256: str) -> Firmware:
+        return Firmware(
+            model=model, version="1.0.2", filename="old.bin", signature="s", sha256=sha256
+        )
 
 
 class FakeStorage:
@@ -176,5 +188,26 @@ def test_execute_rejects_data_that_is_not_an_esp32_image(keypair):
             )
         )
 
+    assert storage.files == {}
+    assert repo.added == []
+
+
+def test_execute_rejects_a_binary_already_stored_under_another_version(keypair):
+    _, private_pem = keypair
+    repo, storage = StoredBinaryFirmwareRepository(), FakeStorage()
+    use_case = UploadFirmware(repo, storage, private_pem)
+
+    with pytest.raises(FirmwareBinaryAlreadyExists) as exc_info:
+        use_case.execute(
+            UploadFirmwareRequest(
+                model="ESP32",
+                version="1.0.3",
+                original_filename="firmware.bin",
+                data=valid_image(),
+                timestamp="260101_000000",
+            )
+        )
+
+    assert exc_info.value.existing_version == "1.0.2"
     assert storage.files == {}
     assert repo.added == []
