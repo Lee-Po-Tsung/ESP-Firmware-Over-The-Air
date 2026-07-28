@@ -8,6 +8,7 @@
 #include <Update.h>
 #include <WiFi.h>
 #include <esp_ota_ops.h>
+#include <esp_partition.h>
 #include <time.h>
 
 // For RSA and SHA-256
@@ -26,6 +27,10 @@ String check_path;
 String download_path;
 String version;
 String signature;
+
+// A version already found to carry the running image, cached so the server
+// re-offering it costs no second download. RAM only, so a reboot re-learns it.
+String skipped_version;
 
 String rootCACertificate;
 String rsaPublicKey;
@@ -104,6 +109,55 @@ String calculateFileSHA256(const char* path) {
         hex += c;
     }
     return hex;
+}
+
+// esp_image_header_t fields, mirrored from backend/domain/firmware_image.py.
+static const size_t HASH_APPENDED_OFFSET = 23;
+static const size_t IMAGE_DIGEST_BYTES = 32;
+
+// Read the SHA-256 ESP-IDF appends to an application image: it occupies the
+// trailing bytes, and the header flags whether it is present at all. Builds
+// without it carry no digest to read.
+bool readAppendedDigest(const char* path, uint8_t out[IMAGE_DIGEST_BYTES]) {
+    File file = LittleFS.open(path, "r");
+    if (!file) return false;
+
+    uint8_t hashAppended = 0;
+    if (!file.seek(HASH_APPENDED_OFFSET) || file.read(&hashAppended, 1) != 1 || hashAppended != 1) {
+        file.close();
+        return false;
+    }
+
+    size_t size = file.size();
+    if (size < IMAGE_DIGEST_BYTES || !file.seek(size - IMAGE_DIGEST_BYTES) ||
+        file.read(out, IMAGE_DIGEST_BYTES) != IMAGE_DIGEST_BYTES) {
+        file.close();
+        return false;
+    }
+
+    file.close();
+    return true;
+}
+
+// Whether a downloaded image is byte-for-byte the running app. Compares the
+// appended digest, which is what esp_partition_get_sha256() returns -- not the
+// manifest sha256, which covers the whole file and so never equals it.
+//
+// Docs:
+// https://docs.espressif.com/projects/esp-idf/en/stable/esp32/api-reference/storage/partition.html#_CPPv424esp_partition_get_sha256PK15esp_partition_tP7uint8_t
+//
+// Fails open: anything unreadable returns false and the image still flashes.
+bool isImageAlreadyRunning(const char* path) {
+    uint8_t candidate[IMAGE_DIGEST_BYTES];
+    if (!readAppendedDigest(path, candidate)) return false;
+
+    const esp_partition_t* running = esp_ota_get_running_partition();
+    if (running == nullptr) return false;
+
+    uint8_t current[IMAGE_DIGEST_BYTES];
+    if (esp_partition_get_sha256(running, current) != ESP_OK) return false;
+
+    return memcmp(candidate, current, sizeof(candidate)) == 0;
 }
 
 // Verify the RSA-PSS digital signature using the public key and manifest
@@ -325,6 +379,15 @@ bool check() {
     }
 
     version = doc["version"].as<String>();
+
+    // (model, version) names one binary for good on the server, so a version
+    // already found to be the running image can never become a real update.
+    if (!skipped_version.isEmpty() && version == skipped_version) {
+        Serial.println("Ignoring " + version + ": already known to be the running image");
+        delClient();
+        return false;
+    }
+
     signature = doc["signature"].as<String>();
     download_path = doc["download_url"].as<String>();
     return true;
@@ -454,6 +517,14 @@ void OTA() {
         Serial.printf(
             "Error: Downgrade attack detected. Version %s is not newer than current %s.\n",
             version.c_str(), FIRMWARE_VERSION);
+        LittleFS.remove("/firmware.bin");
+        return;
+    }
+
+    if (isImageAlreadyRunning("/firmware.bin")) {
+        Serial.printf("Version %s carries the image already running; not flashing.\n",
+                      version.c_str());
+        skipped_version = version;
         LittleFS.remove("/firmware.bin");
         return;
     }
