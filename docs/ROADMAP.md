@@ -91,13 +91,14 @@ and `local_storage.py`, they write `s3_storage.py` the same way.
 - [x] Device endpoints `POST /api/check` and `GET /api/download/{id}` matching the current ESP32 protocol exactly
 - [x] Local-filesystem `StorageBackend`; firmware binaries on disk, metadata in SQLite
 - [x] Fix the two known ESP32 issues while porting: replace the hardcoded system time with SNTP, and align the version-compare logic between device and server
-- [ ] Device-side guard against a reflash loop: store the SHA-256 of the last
-      flashed image in NVS and refuse to reflash identical bytes. The server
-      rejects a binary it has already stored under another version, but it
-      cannot catch a first upload carrying the wrong version label — the device
-      then reports its compiled-in `FIRMWARE_VERSION`, gets offered the same
-      update again, and reflashes on every check until the flash wears out.
-      This is the only guard that holds without trusting the server to be right
+- [x] Device-side guard against a reflash loop: the device compares a downloaded
+      image against the one it is running and skips the flash when they match.
+      The server rejects a binary it has already stored under another version,
+      but it cannot catch a first upload carrying the wrong version label — the
+      device then reports its compiled-in `FIRMWARE_VERSION`, gets offered the
+      same update again, and would reflash on every check until the flash wears
+      out. This is the only guard that holds without trusting the server to be
+      right
 - [ ] One source of truth for the version: a `VERSION` file feeding both the
       ESP32 build and the upload tooling. Today `FIRMWARE_VERSION` in `ota.cpp`
       and the version typed into the upload form are two independent manual
