@@ -59,3 +59,8 @@ dist-ssr
 # Claude craps
 .claude
 CLAUDE.local.md
+
+# Reference OTA projects cloned locally for comparison, not part of this repo
+/ElegantOTA/
+/esp32FOTA/
+/ESP_OTA_Dashboard/
