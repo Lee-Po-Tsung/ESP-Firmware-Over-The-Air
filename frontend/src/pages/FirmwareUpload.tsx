@@ -49,7 +49,7 @@ export default function FirmwareUpload() {
       setMessage('Firmware uploaded successfully.');
       form.reset();
     } catch {
-      setMessage('Cannot reach backend. Please make sure API server is running on port 1234.');
+      setMessage('Cannot reach the backend. Check that the API is running and the Vite /backend proxy is configured.');
     } finally {
       setSubmitting(false);
     }
@@ -68,14 +68,14 @@ export default function FirmwareUpload() {
           <div className="form-group">
             <label>
               Device Model
-              <input type="text" name="model" placeholder="hint" required />
+              <input type="text" name="model" placeholder="e.g. esp32-s3" required />
             </label>
           </div>
 
           <div className="form-group">
             <label>
               Firmware Version
-              <input type="text" name="version" placeholder="hint" required />
+              <input type="text" name="version" placeholder="e.g. 1.2.0" required />
             </label>
           </div>
 

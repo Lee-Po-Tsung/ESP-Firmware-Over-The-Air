@@ -35,8 +35,8 @@ export default function FirmwareList() {
       <div className="main-card">
         <div className="main-card-header">
           <div className="header-titles">
-            <h1>Title</h1>
-            <p>description...</p>
+            <h1>Firmware</h1>
+            <p>Browse uploaded firmware builds and manage OTA packages.</p>
           </div>
           <div className="header-actions">
             <Link to="/devices" className="devices-link-btn">
