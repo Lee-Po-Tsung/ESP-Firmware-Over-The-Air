@@ -562,5 +562,6 @@ void OTA() {
     } else {
         Serial.println("Not enough space to begin update");
         updateBin.close();
+        LittleFS.remove("/firmware.bin");
     }
 }
