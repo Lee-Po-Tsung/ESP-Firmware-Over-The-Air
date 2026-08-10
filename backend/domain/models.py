@@ -41,6 +41,12 @@ class Firmware:
     `signature` is the base64-encoded RSA-PSS signature over the manifest
     `model|version|sha256` and must stay byte-for-byte compatible with what
     the ESP32 verifies on-device.
+
+    `filename` is the storage key, `{sha256}.bin`, and carries no meaning
+    beyond addressing the bytes. Because it is derived from the contents, one
+    blob can back several rows, including rows for different models. Anything
+    that removes firmware has to account for that. The name the uploader chose
+    lives in `original_filename` and is for display only.
     """
 
     model: str
@@ -48,6 +54,7 @@ class Firmware:
     filename: str
     signature: str
     sha256: str
+    original_filename: str | None = None
     id: int | None = None
     created_at: datetime | None = None
 
