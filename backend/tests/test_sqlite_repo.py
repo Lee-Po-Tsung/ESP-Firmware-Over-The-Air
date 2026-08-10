@@ -154,6 +154,40 @@ def test_device_upsert_inserts_then_updates_same_device(session):
     assert repo.get_by_device_id("dev-1").current_version == "1.1.0"
 
 
+def test_device_upsert_returns_the_winning_row_when_two_checkins_race(tmp_path):
+    """Two check-ins for one device, both past the lookup before either commits.
+
+    On a file-backed database so the two sessions hold separate connections;
+    the shared in-memory one would serialize them and never collide. The winner
+    is committed from inside the loser's lookup, which is the only ordering
+    that reproduces this without threads.
+    """
+    engine = create_engine(f"sqlite:///{tmp_path / 'race.db'}")
+    Base.metadata.create_all(engine)
+    checkin = Device(device_id="dev-1", model="ESP32", current_version="1.1.0")
+
+    with Session(engine) as winner_session, Session(engine) as loser_session:
+        loser = SqliteDeviceRepository(loser_session)
+        lookup = loser_session.scalar
+
+        def commit_the_winner_mid_lookup(*args, **kwargs):
+            result = lookup(*args, **kwargs)
+            if result is None:
+                SqliteDeviceRepository(winner_session).upsert(
+                    Device(device_id="dev-1", model="ESP32", current_version="1.0.0")
+                )
+            return result
+
+        loser_session.scalar = commit_the_winner_mid_lookup
+
+        recorded = loser.upsert(checkin)
+
+    assert recorded.device_id == "dev-1"
+    # The losing check-in is dropped rather than raised: a 500 here is a check
+    # the device treats as a failure, and it reboots after three of those.
+    assert recorded.current_version == "1.0.0"
+
+
 def test_get_by_device_id_returns_none_when_missing(session):
     repo = SqliteDeviceRepository(session)
 

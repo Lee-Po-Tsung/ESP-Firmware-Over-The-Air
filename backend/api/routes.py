@@ -21,7 +21,7 @@ from urllib.parse import quote
 from application.auth import AuthenticateUser, InvalidCredentials, RegisterUser, RegisterUserRequest
 from application.check_update import CheckUpdate, ModelNotFound
 from application.upload_firmware import UploadFirmware, UploadFirmwareRequest
-from domain.auth import MAX_PASSWORD_BYTES
+from domain.auth import InvalidCredentialFormat
 from domain.firmware_image import InvalidFirmwareImage
 from domain.models import Role
 from domain.signing import InvalidManifestField
@@ -35,7 +35,7 @@ from ports.repository import (
     UserAlreadyExists,
 )
 from ports.storage import StorageBackend
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict
 
 from api.deps import (
     get_authenticate_user,
@@ -68,16 +68,12 @@ Auth
 """
 
 
+# Pydantic states the wire shape; what makes a credential acceptable is
+# `domain.auth.validate_credentials`, which `scripts/create_user.py` reaches
+# through the same use case.
 class RegisterRequest(BaseModel):
-    username: str = Field(min_length=1)
-    password: str = Field(min_length=8)
-
-    @field_validator("password")
-    @classmethod
-    def _fits_bcrypt(cls, v: str) -> str:
-        if len(v.encode("utf-8")) > MAX_PASSWORD_BYTES:
-            raise ValueError(f"password must be at most {MAX_PASSWORD_BYTES} bytes")
-        return v
+    username: str
+    password: str
 
 
 class LoginRequest(BaseModel):
@@ -104,6 +100,8 @@ def register(
     """Open self-signup, always as an Operator. Admins are seeded via scripts/create_user.py."""
     try:
         user = use_case.execute(RegisterUserRequest(username=body.username, password=body.password))
+    except InvalidCredentialFormat as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     except UserAlreadyExists as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Username taken") from exc
     return UserResponse.model_validate(user)

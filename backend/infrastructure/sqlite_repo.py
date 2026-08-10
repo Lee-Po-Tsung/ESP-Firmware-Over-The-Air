@@ -159,7 +159,29 @@ class SqliteDeviceRepository(DeviceRepository):
         row.model = device.model
         row.current_version = device.current_version
         row.last_seen = device.last_seen
-        self._session.commit()
+        try:
+            self._session.commit()
+        except IntegrityError as exc:
+            # This is a read followed by a write, and `device_id` is unique, so
+            # a second check-in for the same device landing between the two
+            # makes one of them lose. Handlers are `def`, so uvicorn runs them
+            # on a threadpool and a device retrying mid-flight is enough.
+            #
+            # The other two write methods here answer their own version of this
+            # by raising a domain exception, but neither of them is on the
+            # device's path: `main.ino` reboots over a failed check. The winner
+            # is the same device reporting moments earlier, so its row is
+            # returned as it stands and this check-in is dropped. Rollback
+            # expunges the row built above, which is why this reads again
+            # instead of refreshing.
+            self._session.rollback()
+            winner = self._session.scalar(
+                select(DeviceRow).where(DeviceRow.device_id == device.device_id)
+            )
+            if winner is None:
+                raise exc
+            return _to_device(winner)
+
         self._session.refresh(row)
         return _to_device(row)
 

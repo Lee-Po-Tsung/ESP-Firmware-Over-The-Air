@@ -8,9 +8,11 @@ domain dataclasses.
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from pathlib import Path
 
 from config import get_settings
 from sqlalchemy import DateTime, Index, Integer, String, create_engine
+from sqlalchemy.engine import make_url
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker
 
 
@@ -60,9 +62,14 @@ class DeviceRow(Base):
 
 
 def make_engine():
-    settings = get_settings()
-    settings.db_path.parent.mkdir(parents=True, exist_ok=True)
-    return create_engine(settings.database_url, future=True)
+    url = make_url(get_settings().database_url)
+    # Derived from the URL rather than from `db_path`, so setting DATABASE_URL
+    # cannot leave the engine opening one file while the directory of another
+    # gets created. SQLite is the only backend with a directory to create, and
+    # it will not create one itself; `sqlite://` alone means in-memory.
+    if url.drivername.startswith("sqlite") and url.database:
+        Path(url.database).parent.mkdir(parents=True, exist_ok=True)
+    return create_engine(url, future=True)
 
 
 engine = make_engine()
