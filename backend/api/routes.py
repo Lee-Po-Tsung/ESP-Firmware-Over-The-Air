@@ -15,6 +15,7 @@ expects.
 from __future__ import annotations
 
 import datetime
+from urllib.parse import quote
 
 from application.auth import AuthenticateUser, InvalidCredentials, RegisterUser, RegisterUserRequest
 from application.check_update import CheckUpdate, ModelNotFound
@@ -22,6 +23,7 @@ from application.upload_firmware import UploadFirmware, UploadFirmwareRequest
 from domain.auth import MAX_PASSWORD_BYTES
 from domain.firmware_image import InvalidFirmwareImage
 from domain.models import Firmware
+from domain.signing import InvalidManifestField
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from fastapi.responses import Response
 from ports.repository import (
@@ -136,6 +138,25 @@ def check_update(
     }
 
 
+def _content_disposition(filename: str) -> str:
+    """Build a Content-Disposition value that survives any stored filename.
+
+    `original_filename` is whatever the uploader's browser sent, and header
+    values are latin-1 encoded on the way out, so a non-ASCII name raises
+    instead of being sent. RFC 6266 answers this with two parameters: a quoted
+    ASCII fallback, and a percent-encoded UTF-8 form that clients prefer when
+    they understand it. Anything outside printable ASCII becomes an underscore
+    in the fallback, which also keeps a quote or a newline in the name from
+    escaping the quoted string.
+    """
+    ascii_name = "".join(
+        c if c.isascii() and c.isprintable() and c not in '"\\' else "_" for c in filename
+    )
+    # `safe=""`: the default leaves `/` alone, and this is a filename, not a path.
+    encoded = quote(filename, safe="")
+    return f"attachment; filename=\"{ascii_name}\"; filename*=UTF-8''{encoded}"
+
+
 @router.get("/api/download/{firmware_id}")
 def download_firmware(
     firmware_id: int,
@@ -153,7 +174,7 @@ def download_firmware(
     return Response(
         content=data,
         media_type="application/octet-stream",
-        headers={"Content-Disposition": f'attachment; filename="{download_name}"'},
+        headers={"Content-Disposition": _content_disposition(download_name)},
     )
 
 
@@ -211,7 +232,7 @@ def upload(
                 data=data,
             )
         )
-    except InvalidFirmwareImage as exc:
+    except (InvalidManifestField, InvalidFirmwareImage) as exc:
         # The validator's message names the field that failed, so pass it
         # through rather than flattening every rejection into one string.
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc

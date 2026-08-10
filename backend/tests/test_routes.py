@@ -76,12 +76,14 @@ class FakeStorage:
         return filename in self.files
 
 
-def make_firmware(model="ESP32", version="1.0.0", firmware_id=1) -> Firmware:
+def make_firmware(
+    model="ESP32", version="1.0.0", firmware_id=1, original_filename="main.ino.bin"
+) -> Firmware:
     return Firmware(
         model=model,
         version=version,
         filename=f"{firmware_id}_firmware.bin",
-        original_filename="main.ino.bin",
+        original_filename=original_filename,
         signature="c2ln",
         sha256="a" * 64,
         id=firmware_id,
@@ -186,6 +188,38 @@ def test_download_firmware_returns_binary_with_expected_headers(client):
     assert response.headers["content-type"] == "application/octet-stream"
     # The blob is addressed by hash; the browser is offered the uploader's name.
     assert firmware.original_filename in response.headers["content-disposition"]
+
+
+@pytest.mark.parametrize(
+    "original_filename",
+    ["韌體v1.bin", 'we"ird.bin', "line\nbreak.bin"],
+    ids=["non-ascii", "quote", "control-char"],
+)
+def test_download_firmware_survives_a_hostile_upload_name(client, original_filename):
+    """Header values are latin-1 encoded, so an unescaped name is a 500, not a cosmetic bug.
+
+    A row that cannot be downloaded is worse than it sounds: `/api/check` keeps
+    naming it as latest, so every device of that model retries forever.
+    """
+    firmware = make_firmware(firmware_id=1, original_filename=original_filename)
+    app.dependency_overrides[get_firmware_repository] = lambda: FakeFirmwareRepository(
+        firmware_by_id={1: firmware}
+    )
+    app.dependency_overrides[get_storage] = lambda: FakeStorage(
+        {firmware.filename: b"binary contents"}
+    )
+
+    response = client.get("/api/download/1")
+
+    assert response.status_code == 200
+    assert response.content == b"binary contents"
+    disposition = response.headers["content-disposition"]
+    assert disposition.startswith('attachment; filename="')
+    # The fallback carries no character that could end the quoted string early
+    # or split the header; the UTF-8 form keeps the real name recoverable.
+    fallback = disposition.split('"')[1]
+    assert fallback.isascii() and fallback.isprintable()
+    assert "filename*=UTF-8''" in disposition
 
 
 def test_firmware_list_requires_login(client):

@@ -122,6 +122,30 @@ def test_execute_stores_data_under_its_content_hash(keypair):
     assert storage.files == {f"{signing.calculate_sha256_bytes(data)}.bin": data}
 
 
+def test_execute_stores_nothing_when_the_version_is_malformed(keypair):
+    """A `v` prefix used to upload cleanly and then never reach a single device.
+
+    The field check runs before the image check because it is the cheaper of
+    the two and neither depends on the other.
+    """
+    _, private_pem = keypair
+    repo, storage = FakeFirmwareRepository(), FakeStorage()
+    use_case = UploadFirmware(repo, storage, private_pem)
+
+    with pytest.raises(signing.InvalidManifestField):
+        use_case.execute(
+            UploadFirmwareRequest(
+                model="ESP32",
+                version="v1.0.0",
+                original_filename="firmware.bin",
+                data=valid_image(),
+            )
+        )
+
+    assert storage.files == {}
+    assert repo.added == []
+
+
 def test_two_uploads_in_the_same_second_do_not_overwrite_each_other(keypair):
     """The #29 case: distinct binaries, one model, no clock separating them.
 

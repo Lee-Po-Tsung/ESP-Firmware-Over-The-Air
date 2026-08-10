@@ -15,6 +15,7 @@ from config import get_settings
 from domain import auth
 from domain.firmware_image import InvalidFirmwareImage
 from domain.models import Firmware, Role, User
+from domain.signing import InvalidManifestField
 from fastapi.testclient import TestClient
 from main import app
 from ports.repository import (
@@ -69,6 +70,11 @@ class FakeUploadFirmwareBadImage:
 class FakeUploadFirmwareStoredBinary:
     def execute(self, req) -> Firmware:
         raise FirmwareBinaryAlreadyExists(req.model, "1.0.2")
+
+
+class FakeUploadFirmwareBadVersion:
+    def execute(self, req) -> Firmware:
+        raise InvalidManifestField("version must look like 1.2.3, got 'v2.0.0'")
 
 
 @pytest.fixture
@@ -215,6 +221,19 @@ def test_upload_rejects_a_file_that_is_not_an_esp32_image(users, client):
     assert res.status_code == 400
     # The route must pass the validator's message through, not flatten it.
     assert "0xE9" in res.json()["detail"]
+
+
+def test_upload_rejects_a_version_the_manifest_cannot_carry(users, client):
+    users.seed("admin", "pw", Role.ADMIN)
+    app.dependency_overrides[get_upload_firmware] = lambda: FakeUploadFirmwareBadVersion()
+    token = login(client, "admin", "pw")
+
+    res = client.post(
+        "/firmware/upload", files=upload_files(), headers={"Authorization": f"Bearer {token}"}
+    )
+
+    assert res.status_code == 400
+    assert "1.2.3" in res.json()["detail"]
 
 
 def test_upload_conflicts_on_a_binary_already_stored(users, client):

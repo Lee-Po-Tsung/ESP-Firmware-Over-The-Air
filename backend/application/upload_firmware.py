@@ -36,6 +36,7 @@ class UploadFirmware:
         self._private_key_pem = private_key_pem
 
     def execute(self, req: UploadFirmwareRequest) -> Firmware:
+        signing.validate_manifest_fields(req.model, req.version)
         validate_image(req.data)
 
         sha256_hex = signing.calculate_sha256_bytes(req.data)
