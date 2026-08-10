@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 import pytest
 from domain.models import Device, Firmware, Role, User
@@ -201,3 +201,25 @@ def test_get_user_by_username_returns_none_when_missing(session):
     repo = SqliteUserRepository(session)
 
     assert repo.get_by_username("nobody") is None
+
+
+def test_every_repository_hands_back_aware_timestamps(session):
+    """SQLite has no timezone type, so a round-trip strips the offset.
+
+    Re-attaching it is the repository's job. If it were each caller's, the
+    routes would have to remember, and one of them would eventually not.
+    """
+    firmware = SqliteFirmwareRepository(session).add(make_firmware())
+    user = SqliteUserRepository(session).add(make_user())
+    device = SqliteDeviceRepository(session).upsert(
+        Device(
+            device_id="aa:bb:cc",
+            model="ESP32",
+            current_version="1.0.0",
+            last_seen=datetime(2026, 7, 15, 12, 0, 0, tzinfo=timezone.utc),
+        )
+    )
+
+    assert firmware.created_at.tzinfo is not None
+    assert user.created_at.tzinfo is not None
+    assert device.last_seen == datetime(2026, 7, 15, 12, 0, 0, tzinfo=timezone.utc)

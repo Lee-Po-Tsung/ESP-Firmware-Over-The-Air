@@ -5,7 +5,7 @@ The admin gate on `/firmware/upload` is covered in `test_auth_routes.py`.
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 import pytest
 from api.deps import (
@@ -87,6 +87,9 @@ def make_firmware(
         signature="c2ln",
         sha256="a" * 64,
         id=firmware_id,
+        # `id` and `created_at` are only ever None before the row is written,
+        # and every route reads rows that already are.
+        created_at=datetime(2026, 7, 15, 12, 0, 0, tzinfo=timezone.utc),
     )
 
 
@@ -137,6 +140,22 @@ def test_check_update_reports_available_update_with_download_url(client):
         "signature": "c2ln",
         "download_url": "/api/download/42",
     }
+
+
+def test_check_response_carries_only_what_the_device_reads(client):
+    """`CheckUpdateResult` also holds `model`, which was never on the wire.
+
+    The response model is what keeps that true: a field added to the use case's
+    result no longer reaches a device by default.
+    """
+    latest = make_firmware(version="1.2.0", firmware_id=42)
+    app.dependency_overrides[get_check_update] = lambda: CheckUpdate(
+        FakeFirmwareRepository(firmware_by_model={"ESP32": latest}), FakeDeviceRepository()
+    )
+
+    body = client.post("/api/check", json={"model": "ESP32", "version": "1.1.0"}).json()
+
+    assert set(body) == {"update_available", "version", "signature", "download_url"}
 
 
 def test_check_update_records_device_checkin(client):
@@ -242,6 +261,24 @@ def test_firmware_list_api_returns_all_firmware_as_json(client):
     assert response.json()[0]["id"] == 1
 
 
+def test_firmware_list_created_at_carries_a_utc_offset(client):
+    """The two list routes used to disagree, and only one of them was right.
+
+    An ISO string with no offset is read as local time by a browser, so a
+    dashboard showed upload times shifted while device times beside them were
+    correct.
+    """
+    firmware = make_firmware(firmware_id=1)
+    app.dependency_overrides[get_firmware_repository] = lambda: FakeFirmwareRepository(
+        all_firmware=[firmware]
+    )
+    app.dependency_overrides[get_current_user] = lambda: make_operator()
+
+    response = client.get("/api/firmware/list")
+
+    assert response.json()[0]["created_at"] == "2026-07-15T12:00:00Z"
+
+
 def test_device_list_requires_login(client):
     response = client.get("/api/devices")
 
@@ -249,6 +286,8 @@ def test_device_list_requires_login(client):
 
 
 def test_device_list_returns_devices_with_utc_last_seen(client):
+    # The repository is what re-attaches the offset SQLite drops, so a fake
+    # standing in for it hands back an aware datetime too.
     devices = FakeDeviceRepository()
     devices.upsert(
         Device(
@@ -256,7 +295,7 @@ def test_device_list_returns_devices_with_utc_last_seen(client):
             device_id="aa:bb:cc",
             model="ESP32",
             current_version="1.0.0",
-            last_seen=datetime(2026, 7, 15, 12, 0, 0),
+            last_seen=datetime(2026, 7, 15, 12, 0, 0, tzinfo=timezone.utc),
         )
     )
     app.dependency_overrides[get_device_repository] = lambda: devices
@@ -271,6 +310,8 @@ def test_device_list_returns_devices_with_utc_last_seen(client):
             "device_id": "aa:bb:cc",
             "model": "ESP32",
             "current_version": "1.0.0",
-            "last_seen": "2026-07-15T12:00:00+00:00",
+            # FastAPI's encoder writes UTC as `Z`, where the hand-rolled
+            # `isoformat()` this replaced wrote `+00:00`. Both parse the same.
+            "last_seen": "2026-07-15T12:00:00Z",
         }
     ]
