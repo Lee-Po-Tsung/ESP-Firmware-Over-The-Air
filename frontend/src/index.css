@@ -1,7 +1,7 @@
 :root {
   --text: #334155;
   --text-h: #0f172a;
-  --bg: #f8fafc;
+  --bg: #f6f0e8;
   --border: #e2e8f0;
   --code-bg: #f1f5f9;
   --accent: #3b82f6;
@@ -32,11 +32,11 @@
 
 #root {
   width: 100%;
-  margin: 0 auto;
-  text-align: center;
+  margin: 0;
+  text-align: left;
   min-height: 100svh;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   box-sizing: border-box;
 }
 

@@ -2,49 +2,77 @@ import './App.css'
 import { Routes, Route, Link, Navigate, useLocation } from 'react-router'
 import type { ReactNode } from 'react';
 import DeviceList from './pages/DeviceList';
-import FirmwareList from './pages/FirmwareList';
-import FirmwareUpload from './pages/FirmwareUpload';
+import Firmware from './pages/Firmware';
 import Login from './pages/Login';
 import { useAuth } from './auth/context';
 
-function Header() {
+function SiderBar() {
   const { pathname } = useLocation();
   const { session, logout } = useAuth();
-  const showBack = pathname === '/upload' || pathname === '/login' || pathname === '/devices';
+
+  if (pathname === '/login') return null;
+
+  const navItems = [
+    { to: '/', index: '01', label: '韌體管理', hint: 'Firmware overview' },
+    { to: '/devices', index: '02', label: '裝置監控', hint: 'Connected ESP32 fleet' },
+  ];
+
+  function isActivePath(target: string) {
+    if (target === '/') return pathname === '/';
+    return pathname === target;
+  }
 
   return (
-    <header className="app-header">
-      <div className="header-inner">
-        {showBack ? (
-          <Link to="/" className="header-back-link">
-            <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-            </svg>
-            Back to Dashboard
-          </Link>
-        ) : (
-          <span />
-        )}
+    <aside className="sidebar">
+      <div className="sidebar-brand">
+        <div className="sidebar-mark" aria-hidden="true">ESP</div>
+        <div className="sidebar-brand-copy">
+          <span className="sidebar-title">ESPFleet</span>
+          <span className="sidebar-subtitle">Firmware OTA Control Center</span>
+        </div>
+      </div>
 
-        <div className="header-auth">
+      <nav className="sidebar-nav" aria-label="Primary navigation">
+        {navItems.map(item => (
+          <Link
+            key={item.to}
+            to={item.to}
+            className={`sidebar-link${isActivePath(item.to) ? ' is-active' : ''}`}
+          >
+            <span className="sidebar-link-index">{item.index}</span>
+            <span className="sidebar-link-copy">
+              <span className="sidebar-link-label">{item.label}</span>
+              <span className="sidebar-link-hint">{item.hint}</span>
+            </span>
+          </Link>
+        ))}
+      </nav>
+
+      <div className="sidebar-footer">
+        <div className="sidebar-account">
           {session ? (
             <>
-              <span className="header-user">
-                {session.username}
-                <span className="header-role">{session.role}</span>
-              </span>
-              <button type="button" className="auth-btn logout-btn" onClick={logout}>
-                Logout
-              </button>
+              <strong className="sidebar-account-name">{session.username === 'ops' ? 'ops 團隊' : session.username}</strong>
+              <span className="sidebar-account-email">{session.username}@espfleet.io</span>
             </>
           ) : (
-            <Link to="/login" className="auth-btn login-btn">
+            <span className="sidebar-account-name">Guest</span>
+          )}
+        </div>
+
+        <div className="sidebar-actions">
+          {session ? (
+            <button type="button" className="sidebar-action sidebar-logout" onClick={logout}>
+              <span>登出</span>
+            </button>
+          ) : (
+            <Link to="/login" className="sidebar-action sidebar-login">
               Login
             </Link>
           )}
         </div>
       </div>
-    </header>
+    </aside>
   );
 }
 
@@ -56,34 +84,36 @@ function RequireAuth({ children }: { children: ReactNode }) {
 function App() {
   return (
     <>
-      <Header />
-      <Routes>
-        <Route
-          index
-          element={
-            <RequireAuth>
-              <FirmwareList />
-            </RequireAuth>
-          }
-        />
-        <Route
-          path="/upload"
-          element={
-            <RequireAuth>
-              <FirmwareUpload />
-            </RequireAuth>
-          }
-        />
-        <Route
-          path="/devices"
-          element={
-            <RequireAuth>
-              <DeviceList />
-            </RequireAuth>
-          }
-        />
-        <Route path="/login" element={<Login />} />
-      </Routes>
+      <SiderBar />
+      <main className="content-shell">
+        <Routes>
+          <Route
+            index
+            element={
+              <RequireAuth>
+                <Firmware />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/upload"
+            element={
+              <RequireAuth>
+                <Navigate to='/' replace />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/devices"
+            element={
+              <RequireAuth>
+                <DeviceList />
+              </RequireAuth>
+            }
+          />
+          <Route path="/login" element={<Login />} />
+        </Routes>
+      </main>
     </>
   )
 }

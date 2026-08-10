@@ -1,0 +1,278 @@
+.page-wrapper {
+  width: 100%;
+  box-sizing: border-box;
+  flex: 1 1 0;
+  min-width: 0;
+  height: 100%;
+  padding: 1.35rem 1.1rem 1.15rem 0.75rem;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  color: #212529;
+  overflow-y: auto;
+}
+
+.main-card {
+  width: 100%;
+  margin: 0;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  text-align: left;
+}
+
+.main-card-body {
+  padding: 0;
+}
+
+.firmware-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.fw-empty-state {
+  padding: 1.5rem;
+  border: 1px dashed #d6cec3;
+  border-radius: 0.75rem;
+  background: #fff;
+  color: #6b7280;
+  font-size: 0.9rem;
+}
+
+.fw-group-card {
+  border: 1px solid #e0d7cb;
+  border-radius: 0.85rem;
+  background: #ffffff;
+  box-shadow: 0 8px 18px rgba(17, 24, 39, 0.035);
+  overflow: hidden;
+}
+
+.fw-group-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  padding: 1.2rem 1.5rem;
+  border-bottom: 1px solid #f0f0f0;
+  background: #ffffff;
+}
+
+.fw-group-left {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.fw-group-title-row {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+}
+
+.fw-group-subtitle {
+  font-family: var(--mono, monospace);
+  font-size: 0.75rem;
+  color: #6b7280;
+}
+
+.fw-group-model {
+  font-family: var(--mono, monospace);
+  font-size: 1.1rem;
+  color: #212529;
+}
+
+.fw-badge {
+  display: inline-block;
+  padding: 0.15rem 0.5rem;
+  border-radius: 0.35rem;
+  font-family: var(--mono);
+  font-size: 0.65rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.fw-group-badge {
+  background: #d8e7c1;
+  color: #405024;
+  border: 0;
+}
+
+.fw-group-right {
+  display: flex;
+  align-items: center;
+}
+
+.fw-group-toggle-text {
+  font-family: var(--mono, monospace);
+  font-size: 1rem;
+  color: #212529;
+  border-bottom: 1px solid #212529;
+  padding: 0.2rem 0.4rem;
+  border-radius: 4px;
+  cursor: pointer;
+  user-select: none;
+  transition: background-color 0.2s ease;
+}
+
+.fw-group-toggle-text:hover {
+  background-color: #f0f0f0;
+}
+
+.fw-history-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.fw-history-row {
+  display: grid;
+  grid-template-columns: 80px 1fr 300px;
+  gap: 1rem;
+  align-items: center;
+  padding: 1rem 1.5rem;
+  border-top: 1px solid #f0f0f0;
+}
+
+.fw-history-row:first-child {
+  border-top: 0;
+}
+
+.fw-history-version {
+  font-family: var(--mono, monospace);
+  font-size: 0.95rem;
+  color: #212529;
+}
+
+.fw-history-file {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.fw-file-name {
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  color: #5f5b56;
+  word-break: break-all;
+}
+
+.fw-file-meta {
+  font-family: var(--mono);
+  font-size: 0.65rem;
+  color: #91897f;
+}
+
+.fw-history-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.3rem;
+  text-align: right;
+}
+
+.fw-history-status {
+  font-family: var(--mono, monospace);
+  font-size: 0.75rem;
+  color: #888;
+}
+
+.fw-delete-btn {
+  font-family: var(--mono, monospace);
+  font-size: 0.95rem;
+  color: #212529;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid #212529;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.fw-delete-btn:hover {
+  background-color: #f0f0f0;
+}
+
+.fw-delete-confirm {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  justify-content: flex-end;
+}
+
+.fw-delete-warning {
+  font-family: var(--mono, monospace);
+  font-size: 0.75rem;
+  color: #8b7a67;
+}
+
+.fw-confirm-btn,
+.fw-cancel-btn {
+  font-family: var(--mono, monospace);
+  font-size: 0.95rem;
+  color: #212529;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid #212529;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.fw-confirm-btn:hover,
+.fw-cancel-btn:hover {
+  background-color: #f0f0f0;
+}
+
+.fw-confirm-btn:disabled,
+.fw-cancel-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+@media (max-width: 1200px) {
+  .page-wrapper {
+    flex: 1 1 100%;
+    max-width: 100%;
+    padding: 0.75rem 0.9rem 1rem 0.65rem;
+  }
+}
+
+@media (max-width: 1024px) {
+  .fw-group-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+
+  .fw-group-stats {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .fw-history-row {
+    grid-template-columns: 60px 1fr 150px;
+    gap: 0.75rem;
+  }
+}
+
+@media (max-width: 768px) {
+  .fw-group-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .fw-group-stats {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .fw-history-row {
+    grid-template-columns: 1fr;
+    gap: 0.5rem;
+  }
+
+  .fw-history-right {
+    align-items: flex-start;
+  }
+}

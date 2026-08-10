@@ -1,0 +1,74 @@
+.firmware-page {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+}
+
+.main-card-header {
+  padding: 0 1.25rem 1rem;
+  margin-bottom: 0;
+  background: transparent;
+  border-bottom: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.header-titles h1 {
+  font-size: 1.45rem;
+  font-weight: 700;
+  color: #171717;
+  margin: 0 0 0.25rem 0;
+  letter-spacing: -0.03em;
+}
+
+.header-titles p {
+  color: #6b7280;
+  font-size: 0.72rem;
+  margin: 0;
+  max-width: 36rem;
+}
+
+.firmware-dashboard-header {
+  align-items: flex-start;
+}
+
+.firmware-summary {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.firmware-summary-item {
+  color: #2f2a24;
+  font-family: var(--mono);
+  font-size: 0.74rem;
+  letter-spacing: 0;
+}
+
+.firmware-manage-card {
+  display: flex;
+  flex-direction: row;
+  width: 100%;
+  flex: 1;
+  min-height: 0;
+  gap: 0;
+}
+
+@media (max-width: 768px) {
+  .main-card-header {
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .firmware-summary {
+    justify-content: flex-start;
+  }
+
+  .firmware-manage-card {
+    flex-direction: column;
+  }
+}
