@@ -36,6 +36,7 @@ class UploadFirmware:
         self._private_key_pem = private_key_pem
 
     def execute(self, req: UploadFirmwareRequest) -> Firmware:
+        signing.validate_manifest_fields(req.model, req.version)
         validate_image(req.data)
 
         sha256_hex = signing.calculate_sha256_bytes(req.data)
@@ -46,7 +47,7 @@ class UploadFirmware:
             # one and reflashing on every check.
             raise FirmwareBinaryAlreadyExists(req.model, duplicate.version)
 
-        # Sign before storing, so a missing or corrupt private key writes nothing.
+        # Sign before storing: a signing failure then leaves nothing on disk.
         signature = signing.sign_manifest(req.model, req.version, sha256_hex, self._private_key_pem)
 
         # Named after its contents, so a collision implies identical bytes and

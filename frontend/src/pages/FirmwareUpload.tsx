@@ -75,7 +75,15 @@ export default function FirmwareUpload() {
           <div className="form-group">
             <label>
               Firmware Version
-              <input type="text" name="version" placeholder="hint" required />
+              {/* The server rejects anything else; this only saves a round trip. */}
+              <input
+                type="text"
+                name="version"
+                placeholder="1.0.0"
+                pattern="[0-9]+\.[0-9]+\.[0-9]+"
+                required
+              />
+              <span className="help-text">Three numbers, like 1.0.0. No v prefix or suffix.</span>
             </label>
           </div>
 

@@ -5,6 +5,7 @@ import struct
 
 import pytest
 from application.upload_firmware import UploadFirmware, UploadFirmwareRequest
+from conftest import FakeFirmwareRepository, FakeStorage
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding, rsa
 from domain import signing
@@ -34,30 +35,6 @@ def valid_image(filler: int = 0) -> bytes:
     return bytes(image)
 
 
-class FakeFirmwareRepository:
-    """In-memory stand-in for `FirmwareRepository`; records what gets added."""
-
-    def __init__(self) -> None:
-        self.added: list[Firmware] = []
-
-    def add(self, firmware: Firmware) -> Firmware:
-        firmware.id = len(self.added) + 1
-        self.added.append(firmware)
-        return firmware
-
-    def get_by_id(self, firmware_id: int) -> Firmware | None:
-        raise NotImplementedError
-
-    def get_by_sha256(self, model: str, sha256: str) -> Firmware | None:
-        return None
-
-    def get_latest_for_model(self, model: str) -> Firmware | None:
-        raise NotImplementedError
-
-    def list_all(self) -> list[Firmware]:
-        raise NotImplementedError
-
-
 class RejectingFirmwareRepository(FakeFirmwareRepository):
     """Stands in for the unique (model, version) index rejecting an add."""
 
@@ -65,32 +42,21 @@ class RejectingFirmwareRepository(FakeFirmwareRepository):
         raise FirmwareAlreadyExists(firmware.model, firmware.version)
 
 
-class StoredBinaryFirmwareRepository(FakeFirmwareRepository):
-    """Stands in for these exact contents already being on record."""
-
-    def get_by_sha256(self, model: str, sha256: str) -> Firmware:
-        return Firmware(
-            model=model, version="1.0.2", filename="old.bin", signature="s", sha256=sha256
-        )
-
-
-class FakeStorage:
-    """In-memory stand-in for `StorageBackend`."""
-
-    def __init__(self) -> None:
-        self.files: dict[str, bytes] = {}
-
-    def put(self, filename: str, data: bytes) -> None:
-        self.files[filename] = data
-
-    def get(self, filename: str) -> bytes:
-        return self.files[filename]
-
-    def delete(self, filename: str) -> None:
-        self.files.pop(filename, None)
-
-    def exists(self, filename: str) -> bool:
-        return filename in self.files
+def repository_already_holding(data: bytes, model="ESP32", version="1.0.2"):
+    """A repository whose rows already contain exactly these bytes."""
+    sha256 = signing.calculate_sha256_bytes(data)
+    return FakeFirmwareRepository(
+        [
+            Firmware(
+                model=model,
+                version=version,
+                filename=f"{sha256}.bin",
+                signature="s",
+                sha256=sha256,
+                id=1,
+            )
+        ]
+    )
 
 
 @pytest.fixture(scope="module")
@@ -120,6 +86,30 @@ def test_execute_stores_data_under_its_content_hash(keypair):
     )
 
     assert storage.files == {f"{signing.calculate_sha256_bytes(data)}.bin": data}
+
+
+def test_execute_stores_nothing_when_the_version_is_malformed(keypair):
+    """A `v` prefix used to upload cleanly and then never reach a single device.
+
+    The field check runs before the image check because it is the cheaper of
+    the two and neither depends on the other.
+    """
+    _, private_pem = keypair
+    repo, storage = FakeFirmwareRepository(), FakeStorage()
+    use_case = UploadFirmware(repo, storage, private_pem)
+
+    with pytest.raises(signing.InvalidManifestField):
+        use_case.execute(
+            UploadFirmwareRequest(
+                model="ESP32",
+                version="v1.0.0",
+                original_filename="firmware.bin",
+                data=valid_image(),
+            )
+        )
+
+    assert storage.files == {}
+    assert repo.added == []
 
 
 def test_two_uploads_in_the_same_second_do_not_overwrite_each_other(keypair):
@@ -243,7 +233,8 @@ def test_execute_rejects_data_that_is_not_an_esp32_image(keypair):
 
 def test_execute_rejects_a_binary_already_stored_under_another_version(keypair):
     _, private_pem = keypair
-    repo, storage = StoredBinaryFirmwareRepository(), FakeStorage()
+    data = valid_image()
+    repo, storage = repository_already_holding(data), FakeStorage()
     use_case = UploadFirmware(repo, storage, private_pem)
 
     with pytest.raises(FirmwareBinaryAlreadyExists) as exc_info:
@@ -252,7 +243,7 @@ def test_execute_rejects_a_binary_already_stored_under_another_version(keypair):
                 model="ESP32",
                 version="1.0.3",
                 original_filename="firmware.bin",
-                data=valid_image(),
+                data=data,
             )
         )
 

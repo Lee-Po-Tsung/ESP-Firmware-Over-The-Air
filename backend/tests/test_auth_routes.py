@@ -12,41 +12,19 @@ import pytest
 from api.deps import get_authenticate_user, get_upload_firmware, get_user_repository
 from application.auth import AuthenticateUser
 from config import get_settings
+from conftest import FakeUserRepository
 from domain import auth
 from domain.firmware_image import InvalidFirmwareImage
 from domain.models import Firmware, Role, User
+from domain.signing import InvalidManifestField
 from fastapi.testclient import TestClient
 from main import app
-from ports.repository import (
-    FirmwareAlreadyExists,
-    FirmwareBinaryAlreadyExists,
-    UserAlreadyExists,
-)
+from ports.repository import FirmwareAlreadyExists, FirmwareBinaryAlreadyExists
 
 
-class FakeUserRepository:
-    def __init__(self) -> None:
-        self._by_id: dict[int, User] = {}
-        self._by_name: dict[str, User] = {}
-
-    def add(self, user: User) -> User:
-        if user.username in self._by_name:
-            raise UserAlreadyExists(user.username)
-        user.id = len(self._by_id) + 1
-        self._by_id[user.id] = user
-        self._by_name[user.username] = user
-        return user
-
-    def get_by_id(self, user_id: int) -> User | None:
-        return self._by_id.get(user_id)
-
-    def get_by_username(self, username: str) -> User | None:
-        return self._by_name.get(username)
-
-    def seed(self, username: str, password: str, role: Role) -> User:
-        return self.add(
-            User(username=username, password_hash=auth.hash_password(password), role=role)
-        )
+def seed_user(repo: FakeUserRepository, username: str, password: str, role: Role) -> User:
+    """Add an account with a real bcrypt hash, so login goes through the real check."""
+    return repo.add(User(username=username, password_hash=auth.hash_password(password), role=role))
 
 
 class FakeUploadFirmware:
@@ -69,6 +47,11 @@ class FakeUploadFirmwareBadImage:
 class FakeUploadFirmwareStoredBinary:
     def execute(self, req) -> Firmware:
         raise FirmwareBinaryAlreadyExists(req.model, "1.0.2")
+
+
+class FakeUploadFirmwareBadVersion:
+    def execute(self, req) -> Firmware:
+        raise InvalidManifestField("version must look like 1.2.3, got 'v2.0.0'")
 
 
 @pytest.fixture
@@ -112,22 +95,31 @@ def test_register_creates_operator(users, client):
 
 
 def test_register_rejects_short_password(users, client):
+    # 400, not Pydantic's 422: what makes a credential acceptable is a domain
+    # rule, so `scripts/create_user.py` is held to it through the same path.
     res = client.post("/api/auth/register", json={"username": "bob", "password": "short"})
 
-    assert res.status_code == 422
+    assert res.status_code == 400
     assert users.get_by_username("bob") is None
+
+
+def test_register_rejects_empty_username(users, client):
+    res = client.post("/api/auth/register", json={"username": "", "password": "long-enough"})
+
+    assert res.status_code == 400
+    assert users.get_by_username("") is None
 
 
 def test_register_rejects_password_over_bcrypt_limit(users, client):
     res = client.post("/api/auth/register", json={"username": "bob", "password": "x" * 73})
 
-    assert res.status_code == 422
+    assert res.status_code == 400
     assert users.get_by_username("bob") is None
 
 
 def test_login_rejects_overlong_password_as_401(users, client):
     # Must be a clean 401, not a 500 from bcrypt's 72-byte limit.
-    users.seed("bob", "s3cretpw", Role.OPERATOR)
+    seed_user(users, "bob", "s3cretpw", Role.OPERATOR)
 
     res = client.post("/api/auth/login", json={"username": "bob", "password": "x" * 73})
 
@@ -135,7 +127,7 @@ def test_login_rejects_overlong_password_as_401(users, client):
 
 
 def test_register_rejects_duplicate_username(users, client):
-    users.seed("bob", "s3cretpw", Role.OPERATOR)
+    seed_user(users, "bob", "s3cretpw", Role.OPERATOR)
 
     res = client.post("/api/auth/register", json={"username": "bob", "password": "s3cretpw"})
 
@@ -143,7 +135,7 @@ def test_register_rejects_duplicate_username(users, client):
 
 
 def test_login_rejects_bad_password(users, client):
-    users.seed("bob", "pw", Role.OPERATOR)
+    seed_user(users, "bob", "pw", Role.OPERATOR)
 
     res = client.post("/api/auth/login", json={"username": "bob", "password": "nope"})
 
@@ -151,7 +143,7 @@ def test_login_rejects_bad_password(users, client):
 
 
 def test_login_returns_usable_token(users, client):
-    users.seed("bob", "pw", Role.OPERATOR)
+    seed_user(users, "bob", "pw", Role.OPERATOR)
 
     token = login(client, "bob", "pw")
 
@@ -168,7 +160,7 @@ def test_upload_requires_a_token(users, client):
 
 
 def test_upload_forbidden_for_operator(users, client):
-    users.seed("op", "pw", Role.OPERATOR)
+    seed_user(users, "op", "pw", Role.OPERATOR)
     token = login(client, "op", "pw")
 
     res = client.post(
@@ -179,7 +171,7 @@ def test_upload_forbidden_for_operator(users, client):
 
 
 def test_upload_succeeds_for_admin(users, client):
-    users.seed("admin", "pw", Role.ADMIN)
+    seed_user(users, "admin", "pw", Role.ADMIN)
     app.dependency_overrides[get_upload_firmware] = lambda: FakeUploadFirmware()
     token = login(client, "admin", "pw")
 
@@ -192,7 +184,7 @@ def test_upload_succeeds_for_admin(users, client):
 
 
 def test_upload_conflicts_on_a_version_already_stored(users, client):
-    users.seed("admin", "pw", Role.ADMIN)
+    seed_user(users, "admin", "pw", Role.ADMIN)
     app.dependency_overrides[get_upload_firmware] = lambda: FakeUploadFirmwareTakenVersion()
     token = login(client, "admin", "pw")
 
@@ -204,7 +196,7 @@ def test_upload_conflicts_on_a_version_already_stored(users, client):
 
 
 def test_upload_rejects_a_file_that_is_not_an_esp32_image(users, client):
-    users.seed("admin", "pw", Role.ADMIN)
+    seed_user(users, "admin", "pw", Role.ADMIN)
     app.dependency_overrides[get_upload_firmware] = lambda: FakeUploadFirmwareBadImage()
     token = login(client, "admin", "pw")
 
@@ -217,8 +209,21 @@ def test_upload_rejects_a_file_that_is_not_an_esp32_image(users, client):
     assert "0xE9" in res.json()["detail"]
 
 
+def test_upload_rejects_a_version_the_manifest_cannot_carry(users, client):
+    seed_user(users, "admin", "pw", Role.ADMIN)
+    app.dependency_overrides[get_upload_firmware] = lambda: FakeUploadFirmwareBadVersion()
+    token = login(client, "admin", "pw")
+
+    res = client.post(
+        "/firmware/upload", files=upload_files(), headers={"Authorization": f"Bearer {token}"}
+    )
+
+    assert res.status_code == 400
+    assert "1.2.3" in res.json()["detail"]
+
+
 def test_upload_conflicts_on_a_binary_already_stored(users, client):
-    users.seed("admin", "pw", Role.ADMIN)
+    seed_user(users, "admin", "pw", Role.ADMIN)
     app.dependency_overrides[get_upload_firmware] = lambda: FakeUploadFirmwareStoredBinary()
     token = login(client, "admin", "pw")
 

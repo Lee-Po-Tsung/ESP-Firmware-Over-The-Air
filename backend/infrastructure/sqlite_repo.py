@@ -6,6 +6,8 @@ each table row to and from the domain dataclasses.
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 from domain.models import Device, Firmware, Role, User
 from domain.signing import parse_version
 from ports.repository import (
@@ -22,6 +24,18 @@ from sqlalchemy.orm import Session
 from infrastructure.db import DeviceRow, FirmwareRow, UserRow
 
 
+def _utc(value: datetime | None) -> datetime | None:
+    """Re-attach the UTC offset SQLite drops.
+
+    Every timestamp is written as UTC (`db._utcnow`), but SQLite has no
+    timezone type and hands the value back naive. Anything serializing a naive
+    datetime produces an ISO string with no offset, which a browser reads as
+    local time. Stamping here is what keeps that from being each caller's
+    problem to remember.
+    """
+    return value.replace(tzinfo=timezone.utc) if value is not None else None
+
+
 def _to_firmware(row: FirmwareRow) -> Firmware:
     return Firmware(
         id=row.id,
@@ -31,7 +45,7 @@ def _to_firmware(row: FirmwareRow) -> Firmware:
         original_filename=row.original_filename,
         signature=row.signature,
         sha256=row.sha256,
-        created_at=row.created_at,
+        created_at=_utc(row.created_at),
     )
 
 
@@ -41,7 +55,7 @@ def _to_device(row: DeviceRow) -> Device:
         device_id=row.device_id,
         model=row.model,
         current_version=row.current_version,
-        last_seen=row.last_seen,
+        last_seen=_utc(row.last_seen),
     )
 
 
@@ -51,7 +65,7 @@ def _to_user(row: UserRow) -> User:
         username=row.username,
         password_hash=row.password_hash,
         role=Role(row.role),
-        created_at=row.created_at,
+        created_at=_utc(row.created_at),
     )
 
 
@@ -145,7 +159,29 @@ class SqliteDeviceRepository(DeviceRepository):
         row.model = device.model
         row.current_version = device.current_version
         row.last_seen = device.last_seen
-        self._session.commit()
+        try:
+            self._session.commit()
+        except IntegrityError as exc:
+            # This is a read followed by a write, and `device_id` is unique, so
+            # a second check-in for the same device landing between the two
+            # makes one of them lose. Handlers are `def`, so uvicorn runs them
+            # on a threadpool and a device retrying mid-flight is enough.
+            #
+            # The other two write methods here answer their own version of this
+            # by raising a domain exception, but neither of them is on the
+            # device's path: `main.ino` reboots over a failed check. The winner
+            # is the same device reporting moments earlier, so its row is
+            # returned as it stands and this check-in is dropped. Rollback
+            # expunges the row built above, which is why this reads again
+            # instead of refreshing.
+            self._session.rollback()
+            winner = self._session.scalar(
+                select(DeviceRow).where(DeviceRow.device_id == device.device_id)
+            )
+            if winner is None:
+                raise exc
+            return _to_device(winner)
+
         self._session.refresh(row)
         return _to_device(row)
 

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 import pytest
 from domain.models import Device, Firmware, Role, User
@@ -154,6 +154,40 @@ def test_device_upsert_inserts_then_updates_same_device(session):
     assert repo.get_by_device_id("dev-1").current_version == "1.1.0"
 
 
+def test_device_upsert_returns_the_winning_row_when_two_checkins_race(tmp_path):
+    """Two check-ins for one device, both past the lookup before either commits.
+
+    On a file-backed database so the two sessions hold separate connections;
+    the shared in-memory one would serialize them and never collide. The winner
+    is committed from inside the loser's lookup, which is the only ordering
+    that reproduces this without threads.
+    """
+    engine = create_engine(f"sqlite:///{tmp_path / 'race.db'}")
+    Base.metadata.create_all(engine)
+    checkin = Device(device_id="dev-1", model="ESP32", current_version="1.1.0")
+
+    with Session(engine) as winner_session, Session(engine) as loser_session:
+        loser = SqliteDeviceRepository(loser_session)
+        lookup = loser_session.scalar
+
+        def commit_the_winner_mid_lookup(*args, **kwargs):
+            result = lookup(*args, **kwargs)
+            if result is None:
+                SqliteDeviceRepository(winner_session).upsert(
+                    Device(device_id="dev-1", model="ESP32", current_version="1.0.0")
+                )
+            return result
+
+        loser_session.scalar = commit_the_winner_mid_lookup
+
+        recorded = loser.upsert(checkin)
+
+    assert recorded.device_id == "dev-1"
+    # The losing check-in is dropped rather than raised: a 500 here is a check
+    # the device treats as a failure, and it reboots after three of those.
+    assert recorded.current_version == "1.0.0"
+
+
 def test_get_by_device_id_returns_none_when_missing(session):
     repo = SqliteDeviceRepository(session)
 
@@ -201,3 +235,25 @@ def test_get_user_by_username_returns_none_when_missing(session):
     repo = SqliteUserRepository(session)
 
     assert repo.get_by_username("nobody") is None
+
+
+def test_every_repository_hands_back_aware_timestamps(session):
+    """SQLite has no timezone type, so a round-trip strips the offset.
+
+    Re-attaching it is the repository's job. If it were each caller's, the
+    routes would have to remember, and one of them would eventually not.
+    """
+    firmware = SqliteFirmwareRepository(session).add(make_firmware())
+    user = SqliteUserRepository(session).add(make_user())
+    device = SqliteDeviceRepository(session).upsert(
+        Device(
+            device_id="aa:bb:cc",
+            model="ESP32",
+            current_version="1.0.0",
+            last_seen=datetime(2026, 7, 15, 12, 0, 0, tzinfo=timezone.utc),
+        )
+    )
+
+    assert firmware.created_at.tzinfo is not None
+    assert user.created_at.tzinfo is not None
+    assert device.last_seen == datetime(2026, 7, 15, 12, 0, 0, tzinfo=timezone.utc)
