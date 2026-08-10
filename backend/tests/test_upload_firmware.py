@@ -20,13 +20,14 @@ from domain.models import Firmware
 from ports.repository import FirmwareAlreadyExists, FirmwareBinaryAlreadyExists
 
 
-def valid_image() -> bytes:
+def valid_image(filler: int = 0) -> bytes:
     """Minimal bytes that clear `validate_image`; the contents carry no meaning.
 
     Leaves the appended-digest flag clear, a legitimate build option, so there
-    is no digest to keep in step with the padding.
+    is no digest to keep in step with the padding. `filler` varies the payload
+    so two calls differ in nothing but their hash.
     """
-    image = bytearray(MIN_FIRMWARE_BYTES)
+    image = bytearray([filler] * MIN_FIRMWARE_BYTES)
     image[0] = IMAGE_MAGIC
     struct.pack_into("<H", image, CHIP_ID_OFFSET, 0x0009)
     struct.pack_into("<I", image, APP_DESC_OFFSET, APP_DESC_MAGIC)
@@ -103,7 +104,7 @@ def keypair():
     return private_key, private_pem
 
 
-def test_execute_stores_data_under_timestamped_filename(keypair):
+def test_execute_stores_data_under_its_content_hash(keypair):
     _, private_pem = keypair
     repo, storage = FakeFirmwareRepository(), FakeStorage()
     use_case = UploadFirmware(repo, storage, private_pem)
@@ -115,11 +116,37 @@ def test_execute_stores_data_under_timestamped_filename(keypair):
             version="1.0.0",
             original_filename="firmware.bin",
             data=data,
-            timestamp="260101_000000",
         )
     )
 
-    assert storage.files == {"260101_000000_firmware.bin": data}
+    assert storage.files == {f"{signing.calculate_sha256_bytes(data)}.bin": data}
+
+
+def test_two_uploads_in_the_same_second_do_not_overwrite_each_other(keypair):
+    """The #29 case: distinct binaries, one model, no clock separating them.
+
+    Under timestamp naming both landed on one file and the first row served the
+    second's bytes, failing signature verification on-device forever.
+    """
+    _, private_pem = keypair
+    repo, storage = FakeFirmwareRepository(), FakeStorage()
+    use_case = UploadFirmware(repo, storage, private_pem)
+    first, second = valid_image(0x11), valid_image(0x22)
+
+    for version, data in (("1.0.0", first), ("1.0.1", second)):
+        use_case.execute(
+            UploadFirmwareRequest(
+                model="ESP32",
+                version=version,
+                original_filename="main.ino.bin",
+                data=data,
+            )
+        )
+
+    assert len(storage.files) == 2
+    for firmware, expected in zip(repo.added, (first, second), strict=True):
+        assert storage.get(firmware.filename) == expected
+        assert signing.calculate_sha256_bytes(storage.get(firmware.filename)) == firmware.sha256
 
 
 def test_execute_records_firmware_with_matching_hash_and_verifiable_signature(keypair):
@@ -134,15 +161,15 @@ def test_execute_records_firmware_with_matching_hash_and_verifiable_signature(ke
             version="1.0.0",
             original_filename="firmware.bin",
             data=data,
-            timestamp="260101_000000",
         )
     )
 
     assert firmware is repo.added[0]
     assert firmware.model == "ESP32"
     assert firmware.version == "1.0.0"
-    assert firmware.filename == "260101_000000_firmware.bin"
     assert firmware.sha256 == signing.calculate_sha256_bytes(data)
+    assert firmware.filename == f"{firmware.sha256}.bin"
+    assert firmware.original_filename == "firmware.bin"
 
     manifest_bytes = signing.build_manifest("ESP32", "1.0.0", firmware.sha256).encode("utf-8")
     private_key.public_key().verify(
@@ -153,10 +180,16 @@ def test_execute_records_firmware_with_matching_hash_and_verifiable_signature(ke
     )
 
 
-def test_execute_removes_the_stored_file_when_the_version_is_taken(keypair):
+def test_execute_keeps_the_stored_blob_when_the_version_is_taken(keypair):
+    """A content-addressed blob may already back another row, so it stays put.
+
+    Deleting one a concurrent upload has committed a row against makes that row
+    404, which reboot-loops every device mid-download.
+    """
     _, private_pem = keypair
     repo, storage = RejectingFirmwareRepository(), FakeStorage()
     use_case = UploadFirmware(repo, storage, private_pem)
+    data = valid_image()
 
     with pytest.raises(FirmwareAlreadyExists):
         use_case.execute(
@@ -164,12 +197,29 @@ def test_execute_removes_the_stored_file_when_the_version_is_taken(keypair):
                 model="ESP32",
                 version="1.0.0",
                 original_filename="firmware.bin",
+                data=data,
+            )
+        )
+
+    assert storage.files == {f"{signing.calculate_sha256_bytes(data)}.bin": data}
+
+
+def test_execute_stores_nothing_when_signing_fails():
+    repo, storage = FakeFirmwareRepository(), FakeStorage()
+    use_case = UploadFirmware(repo, storage, b"not a private key")
+
+    with pytest.raises(ValueError):
+        use_case.execute(
+            UploadFirmwareRequest(
+                model="ESP32",
+                version="1.0.0",
+                original_filename="firmware.bin",
                 data=valid_image(),
-                timestamp="260101_000000",
             )
         )
 
     assert storage.files == {}
+    assert repo.added == []
 
 
 def test_execute_rejects_data_that_is_not_an_esp32_image(keypair):
@@ -184,7 +234,6 @@ def test_execute_rejects_data_that_is_not_an_esp32_image(keypair):
                 version="1.0.0",
                 original_filename="firmware.bin",
                 data=b"not an image",
-                timestamp="260101_000000",
             )
         )
 
@@ -204,7 +253,6 @@ def test_execute_rejects_a_binary_already_stored_under_another_version(keypair):
                 version="1.0.3",
                 original_filename="firmware.bin",
                 data=valid_image(),
-                timestamp="260101_000000",
             )
         )
 

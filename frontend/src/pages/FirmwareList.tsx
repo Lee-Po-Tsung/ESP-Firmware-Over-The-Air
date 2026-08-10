@@ -8,6 +8,7 @@ interface Firmware {
   model: string;
   version: string;
   filename: string;
+  original_filename: string | null;
   signature: string;
   sha256: string;
   created_at: string;
@@ -75,7 +76,8 @@ export default function FirmwareList() {
                 <div className="fw-details-grid">
                   <div className="fw-detail-item">
                     <span className="fw-detail-label">File</span>
-                    <div className="fw-detail-value">{fw.filename}</div>
+                    {/* filename is the sha256 blob key, shown one row down */}
+                    <div className="fw-detail-value">{fw.original_filename ?? fw.filename}</div>
                   </div>
                   <div className="fw-detail-item">
                     <span className="fw-detail-label">SHA-256 Hash</span>

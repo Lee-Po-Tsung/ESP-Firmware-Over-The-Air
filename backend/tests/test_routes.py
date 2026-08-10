@@ -81,6 +81,7 @@ def make_firmware(model="ESP32", version="1.0.0", firmware_id=1) -> Firmware:
         model=model,
         version=version,
         filename=f"{firmware_id}_firmware.bin",
+        original_filename="main.ino.bin",
         signature="c2ln",
         sha256="a" * 64,
         id=firmware_id,
@@ -183,7 +184,8 @@ def test_download_firmware_returns_binary_with_expected_headers(client):
     assert response.status_code == 200
     assert response.content == b"binary contents"
     assert response.headers["content-type"] == "application/octet-stream"
-    assert firmware.filename in response.headers["content-disposition"]
+    # The blob is addressed by hash; the browser is offered the uploader's name.
+    assert firmware.original_filename in response.headers["content-disposition"]
 
 
 def test_firmware_list_requires_login(client):

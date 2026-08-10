@@ -147,10 +147,13 @@ def download_firmware(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
 
     data = storage.get(firmware.filename)
+    # The stored name is a hash. Offer a browser the name it was uploaded under;
+    # the device ignores the header and reads the stream.
+    download_name = firmware.original_filename or firmware.filename
     return Response(
         content=data,
         media_type="application/octet-stream",
-        headers={"Content-Disposition": f'attachment; filename="{firmware.filename}"'},
+        headers={"Content-Disposition": f'attachment; filename="{download_name}"'},
     )
 
 
@@ -198,7 +201,6 @@ def upload(
     firmware: UploadFile = File(...),
     use_case: UploadFirmware = Depends(get_upload_firmware),
 ) -> dict:
-    timestamp = datetime.datetime.now().strftime("%y%m%d_%H%M%S")
     data = firmware.file.read()
     try:
         use_case.execute(
@@ -207,7 +209,6 @@ def upload(
                 version=version,
                 original_filename=firmware.filename or "firmware.bin",
                 data=data,
-                timestamp=timestamp,
             )
         )
     except InvalidFirmwareImage as exc:

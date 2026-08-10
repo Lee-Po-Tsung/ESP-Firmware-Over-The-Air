@@ -28,6 +28,7 @@ def _to_firmware(row: FirmwareRow) -> Firmware:
         model=row.model,
         version=row.version,
         filename=row.filename,
+        original_filename=row.original_filename,
         signature=row.signature,
         sha256=row.sha256,
         created_at=row.created_at,
@@ -91,6 +92,7 @@ class SqliteFirmwareRepository(FirmwareRepository):
             model=firmware.model,
             version=firmware.version,
             filename=firmware.filename,
+            original_filename=firmware.original_filename,
             signature=firmware.signature,
             sha256=firmware.sha256,
         )
