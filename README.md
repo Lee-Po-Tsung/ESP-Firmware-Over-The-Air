@@ -106,5 +106,5 @@ arduino-cli compile --fqbn esp32:esp32:esp32s3 --board-options "PartitionScheme=
 
 ## Scope Notes
 
-- The dashboard login/register forms carry the JWT in memory only; a page reload drops the session, and refresh tokens are deferred to M6. An end-to-end test for the upload flow is the remaining M3 item.
+- The dashboard keeps the JWT in `sessionStorage`, so a reload holds the session but closing the tab ends it. The token still expires after an hour with no way to renew it; refresh rotation is deferred to M6. An end-to-end test for the upload flow is the remaining M3 item.
 - Local dev serves HTTPS with the self-signed cert from `generate_tls_cert.py` (the device pins it as its CA). Production TLS via a reverse proxy with automatic certificates (Caddy) arrives at M5.
