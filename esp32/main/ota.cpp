@@ -340,10 +340,16 @@ bool check() {
     Serial.println("Current version: " + String(FIRMWARE_VERSION));
     if (client == nullptr) setClient();
 
+    // Everything the dashboard knows about a device arrives here. The check is
+    // the only moment the device speaks, so anything the server wants to show
+    // has to ride along with it.
     JsonDocument req;
     req["device_id"] = WiFi.macAddress();
     req["model"] = DEVICE_MODEL;
     req["version"] = FIRMWARE_VERSION;
+    req["poll_interval_seconds"] = POLL_INTERVAL_SECONDS;
+    req["rssi"] = WiFi.RSSI();
+    req["ip"] = WiFi.localIP().toString();
     String data;
     serializeJson(req, data);
     Serial.println("Check request: " + data);

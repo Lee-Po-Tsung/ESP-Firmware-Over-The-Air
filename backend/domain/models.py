@@ -63,12 +63,26 @@ class Firmware:
 class Device:
     """A physical ESP32 unit in the field.
 
-    Kept intentionally small for M1 — only enough to model the check-in. Fleet
-    visibility (last-seen, history, rollback detection) arrives in M4.
+    Every field is what the device reported on its last check-in, so the
+    dashboard always reads state that is at most one check interval old.
+    Nothing here says whether the device is online or behind: both are read off
+    `last_seen` and `current_version` at request time by `domain/fleet.py`,
+    because a stored status would be wrong the moment a device stops reporting.
+
+    `poll_interval_seconds` is how long the device intends to wait before
+    checking in again. It travels with the check-in rather than being a server
+    constant, so the one place that number is written down stays `ota.h`.
+
+    Everything past `model` is nullable. Rows written before a field existed
+    are never backfilled, since the device overwrites its own row on the next
+    check-in anyway.
     """
 
     device_id: str
     model: str
     current_version: str | None = None
     last_seen: datetime | None = None
+    poll_interval_seconds: int | None = None
+    rssi: int | None = None
+    ip: str | None = None
     id: int | None = None

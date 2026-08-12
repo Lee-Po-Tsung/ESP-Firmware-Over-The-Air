@@ -56,6 +56,9 @@ def _to_device(row: DeviceRow) -> Device:
         model=row.model,
         current_version=row.current_version,
         last_seen=_utc(row.last_seen),
+        poll_interval_seconds=row.poll_interval_seconds,
+        rssi=row.rssi,
+        ip=row.ip,
     )
 
 
@@ -159,6 +162,9 @@ class SqliteDeviceRepository(DeviceRepository):
         row.model = device.model
         row.current_version = device.current_version
         row.last_seen = device.last_seen
+        row.poll_interval_seconds = device.poll_interval_seconds
+        row.rssi = device.rssi
+        row.ip = device.ip
         try:
             self._session.commit()
         except IntegrityError as exc:
