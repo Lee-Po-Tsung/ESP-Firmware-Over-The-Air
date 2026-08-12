@@ -15,12 +15,13 @@ expects.
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from urllib.parse import quote
 
 from application.auth import AuthenticateUser, InvalidCredentials, RegisterUser, RegisterUserRequest
-from application.check_update import CheckUpdate, ModelNotFound
+from application.check_update import CheckUpdate, CheckUpdateRequest, ModelNotFound
 from application.upload_firmware import UploadFirmware, UploadFirmwareRequest
+from domain import fleet
 from domain.auth import InvalidCredentialFormat
 from domain.firmware_image import InvalidFirmwareImage
 from domain.models import Role
@@ -129,9 +130,19 @@ Device protocol
 
 
 class CheckRequest(BaseModel):
+    """What `ota.cpp:check()` sends. Only `model` and `version` steer the answer.
+
+    The telemetry is required rather than optional: there is one device, it is
+    reflashed alongside the server, and a field that silently stopped arriving
+    would surface as a null column on the dashboard instead of a 422 here.
+    """
+
     model: str
     version: str
     device_id: str | None = None
+    poll_interval_seconds: int
+    rssi: int
+    ip: str
 
 
 class CheckResponse(_FromDomain):
@@ -154,7 +165,16 @@ def check_update(
     use_case: CheckUpdate = Depends(get_check_update),
 ) -> CheckResponse:
     try:
-        result = use_case.execute(body.model, body.version, body.device_id)
+        result = use_case.execute(
+            CheckUpdateRequest(
+                model=body.model,
+                version=body.version,
+                device_id=body.device_id,
+                poll_interval_seconds=body.poll_interval_seconds,
+                rssi=body.rssi,
+                ip=body.ip,
+            )
+        )
     except ModelNotFound as exc:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN) from exc
 
@@ -224,19 +244,46 @@ Dashboard device page
 """
 
 
-class DeviceResponse(_FromDomain):
+class DeviceResponse(BaseModel):
+    """A device row plus the one thing about it the database does not hold.
+
+    Built field by field rather than read off the dataclass, because `online`
+    has no attribute to read: it is `fleet.is_online` answered against the
+    clock at request time.
+    """
+
     id: int
     device_id: str
     model: str
     current_version: str | None
     last_seen: datetime | None
+    poll_interval_seconds: int | None
+    rssi: int | None
+    ip: str | None
+    online: bool | None
 
 
 @router.get("/api/devices", dependencies=[Depends(get_current_user)])
 def device_list_api(
     repo: DeviceRepository = Depends(get_device_repository),
 ) -> list[DeviceResponse]:
-    return [DeviceResponse.model_validate(d) for d in repo.list_all()]
+    # One clock reading for the whole list. Sampling per device would let two
+    # rows in the same response be judged against different moments.
+    now = datetime.now(timezone.utc)
+    return [
+        DeviceResponse(
+            id=d.id,
+            device_id=d.device_id,
+            model=d.model,
+            current_version=d.current_version,
+            last_seen=d.last_seen,
+            poll_interval_seconds=d.poll_interval_seconds,
+            rssi=d.rssi,
+            ip=d.ip,
+            online=fleet.is_online(d.last_seen, d.poll_interval_seconds, now),
+        )
+        for d in repo.list_all()
+    ]
 
 
 """

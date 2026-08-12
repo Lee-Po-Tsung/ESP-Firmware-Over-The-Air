@@ -43,6 +43,17 @@ def make_firmware(
     )
 
 
+def check_payload(**overrides) -> dict:
+    """A well-formed check-in. `ota.cpp` always sends the telemetry, so tests do too."""
+    return {
+        "model": "ESP32",
+        "version": "1.0.0",
+        "poll_interval_seconds": 6,
+        "rssi": -52,
+        "ip": "10.0.4.11",
+    } | overrides
+
+
 @pytest.fixture
 def client():
     with TestClient(app) as c:
@@ -55,7 +66,7 @@ def test_check_update_returns_403_for_unknown_model(client):
         FakeFirmwareRepository(), FakeDeviceRepository()
     )
 
-    response = client.post("/api/check", json={"model": "ESP32", "version": "1.0.0"})
+    response = client.post("/api/check", json=check_payload())
 
     assert response.status_code == 403
 
@@ -66,7 +77,7 @@ def test_check_update_reports_no_update_when_current_is_latest(client):
         FakeFirmwareRepository([latest]), FakeDeviceRepository()
     )
 
-    response = client.post("/api/check", json={"model": "ESP32", "version": "1.0.0"})
+    response = client.post("/api/check", json=check_payload())
 
     assert response.status_code == 200
     assert response.json() == {"update_available": False}
@@ -78,9 +89,7 @@ def test_check_update_reports_available_update_with_download_url(client):
         FakeFirmwareRepository([latest]), FakeDeviceRepository()
     )
 
-    response = client.post(
-        "/api/check", json={"model": "ESP32", "version": "1.1.0", "device_id": "dev-1"}
-    )
+    response = client.post("/api/check", json=check_payload(version="1.1.0", device_id="dev-1"))
 
     assert response.status_code == 200
     body = response.json()
@@ -103,7 +112,7 @@ def test_check_response_carries_only_what_the_device_reads(client):
         FakeFirmwareRepository([latest]), FakeDeviceRepository()
     )
 
-    body = client.post("/api/check", json={"model": "ESP32", "version": "1.1.0"}).json()
+    body = client.post("/api/check", json=check_payload(version="1.1.0")).json()
 
     assert set(body) == {"update_available", "version", "signature", "download_url"}
 
@@ -115,7 +124,7 @@ def test_check_update_records_device_checkin(client):
         FakeFirmwareRepository([latest]), devices
     )
 
-    client.post("/api/check", json={"model": "ESP32", "version": "1.1.0", "device_id": "dev-1"})
+    client.post("/api/check", json=check_payload(version="1.1.0", device_id="dev-1"))
 
     assert devices.devices["dev-1"].current_version == "1.1.0"
 
@@ -219,6 +228,36 @@ def test_firmware_list_created_at_carries_a_utc_offset(client):
     assert response.json()[0]["created_at"] == "2026-07-15T12:00:00Z"
 
 
+def test_device_list_derives_online_from_the_reported_interval(client):
+    """`online` is the one key with no column behind it.
+
+    It is answered against the clock at request time, so a device that checked
+    in moments ago reads as online without anything having written a status.
+    """
+    devices = FakeDeviceRepository()
+    devices.upsert(
+        Device(
+            id=1,
+            device_id="aa:bb:cc",
+            model="ESP32",
+            current_version="1.0.0",
+            last_seen=datetime.now(timezone.utc),
+            poll_interval_seconds=6,
+            rssi=-52,
+            ip="10.0.4.11",
+        )
+    )
+    app.dependency_overrides[get_device_repository] = lambda: devices
+    app.dependency_overrides[get_current_user] = lambda: make_operator()
+
+    body = client.get("/api/devices").json()
+
+    assert body[0]["online"] is True
+    assert body[0]["rssi"] == -52
+    assert body[0]["ip"] == "10.0.4.11"
+    assert body[0]["poll_interval_seconds"] == 6
+
+
 def test_device_list_requires_login(client):
     response = client.get("/api/devices")
 
@@ -253,5 +292,11 @@ def test_device_list_returns_devices_with_utc_last_seen(client):
             # FastAPI's encoder writes UTC as `Z`, where the hand-rolled
             # `isoformat()` this replaced wrote `+00:00`. Both parse the same.
             "last_seen": "2026-07-15T12:00:00Z",
+            # A device on firmware from before it reported these. `online` is
+            # null rather than false: nothing here says the device is gone.
+            "poll_interval_seconds": None,
+            "rssi": None,
+            "ip": None,
+            "online": None,
         }
     ]

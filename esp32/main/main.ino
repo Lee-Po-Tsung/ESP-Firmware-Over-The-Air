@@ -65,7 +65,7 @@ void loop() {
     // v1.0.0 = green, v1.0.1 = red. This line is the only per-version difference.
     Serial.println("LED: GREEN (running v1.0.0)");
     neopixelWrite(RGB_BUILTIN, 0, 64, 0);
-    delay(6000);  // hold the colour, then re-check for an update
+    delay(POLL_INTERVAL_SECONDS * 1000);  // hold the colour, then re-check for an update
 
     // If wifi connected then check the latest firmware
     if (WiFi.status() == WL_CONNECTED) {
