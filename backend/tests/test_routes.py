@@ -27,7 +27,11 @@ def make_operator() -> User:
 
 
 def make_firmware(
-    model="ESP32", version="1.0.0", firmware_id=1, original_filename="main.ino.bin"
+    model="ESP32",
+    version="1.0.0",
+    firmware_id=1,
+    original_filename="main.ino.bin",
+    notes=None,
 ) -> Firmware:
     return Firmware(
         model=model,
@@ -36,6 +40,8 @@ def make_firmware(
         original_filename=original_filename,
         signature="c2ln",
         sha256="a" * 64,
+        size_bytes=1300234,
+        notes=notes,
         id=firmware_id,
         # `id` and `created_at` are only ever None before the row is written,
         # and every route reads rows that already are.
@@ -210,6 +216,18 @@ def test_firmware_list_api_returns_all_firmware_as_json(client):
     assert response.status_code == 200
     assert response.json()[0]["model"] == "ESP32"
     assert response.json()[0]["id"] == 1
+
+
+def test_firmware_list_api_returns_size_and_notes(client):
+    firmware = make_firmware(firmware_id=1, notes="Fix SNTP retry storm")
+    app.dependency_overrides[get_firmware_repository] = lambda: FakeFirmwareRepository([firmware])
+    app.dependency_overrides[get_current_user] = lambda: make_operator()
+
+    response = client.get("/api/firmware/list")
+
+    assert response.status_code == 200
+    assert response.json()[0]["size_bytes"] == 1300234
+    assert response.json()[0]["notes"] == "Fix SNTP retry storm"
 
 
 def test_firmware_list_created_at_carries_a_utc_offset(client):

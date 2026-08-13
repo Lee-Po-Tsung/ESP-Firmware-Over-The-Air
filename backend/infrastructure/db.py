@@ -36,6 +36,8 @@ class FirmwareRow(Base):
     filename: Mapped[str] = mapped_column(String, nullable=False)
     # Nullable: rows predating migration 0004 have no name to show.
     original_filename: Mapped[str | None] = mapped_column(String, nullable=True)
+    size_bytes: Mapped[int] = mapped_column(Integer, nullable=False)
+    notes: Mapped[str | None] = mapped_column(String, nullable=True)
     signature: Mapped[str] = mapped_column(String, nullable=False)
     sha256: Mapped[str] = mapped_column(String, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, nullable=False)

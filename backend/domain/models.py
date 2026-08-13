@@ -47,6 +47,9 @@ class Firmware:
     blob can back several rows, including rows for different models. Anything
     that removes firmware has to account for that. The name the uploader chose
     lives in `original_filename` and is for display only.
+
+    `size_bytes` and `notes` are dashboard display metadata and never enter the
+    signed manifest, which stays `model|version|sha256`.
     """
 
     model: str
@@ -54,6 +57,8 @@ class Firmware:
     filename: str
     signature: str
     sha256: str
+    size_bytes: int
+    notes: str | None = None
     original_filename: str | None = None
     id: int | None = None
     created_at: datetime | None = None
