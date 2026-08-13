@@ -24,6 +24,7 @@ def make_firmware(model="ESP32", version="1.1.0", firmware_id=7) -> Firmware:
         filename=f"{firmware_id}_firmware.bin",
         signature="c2ln",
         sha256="a" * 64,
+        size_bytes=1,
         id=firmware_id,
     )
 

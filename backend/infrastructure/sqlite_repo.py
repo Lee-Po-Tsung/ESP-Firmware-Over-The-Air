@@ -45,6 +45,8 @@ def _to_firmware(row: FirmwareRow) -> Firmware:
         original_filename=row.original_filename,
         signature=row.signature,
         sha256=row.sha256,
+        size_bytes=row.size_bytes,
+        notes=row.notes,
         created_at=_utc(row.created_at),
     )
 
@@ -112,6 +114,8 @@ class SqliteFirmwareRepository(FirmwareRepository):
             original_filename=firmware.original_filename,
             signature=firmware.signature,
             sha256=firmware.sha256,
+            size_bytes=firmware.size_bytes,
+            notes=firmware.notes,
         )
         self._session.add(row)
         try:

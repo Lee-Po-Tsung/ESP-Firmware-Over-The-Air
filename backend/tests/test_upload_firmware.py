@@ -53,6 +53,7 @@ def repository_already_holding(data: bytes, model="ESP32", version="1.0.2"):
                 filename=f"{sha256}.bin",
                 signature="s",
                 sha256=sha256,
+                size_bytes=len(data),
                 id=1,
             )
         ]
@@ -168,6 +169,61 @@ def test_execute_records_firmware_with_matching_hash_and_verifiable_signature(ke
         padding.PSS(mgf=padding.MGF1(hashes.SHA256()), salt_length=padding.PSS.MAX_LENGTH),
         hashes.SHA256(),
     )
+
+
+def test_execute_records_size_and_notes(keypair):
+    _, private_pem = keypair
+    repo, storage = FakeFirmwareRepository(), FakeStorage()
+    use_case = UploadFirmware(repo, storage, private_pem)
+    data = valid_image()
+
+    firmware = use_case.execute(
+        UploadFirmwareRequest(
+            model="ESP32",
+            version="1.0.0",
+            original_filename="firmware.bin",
+            data=data,
+            notes="  Fix SNTP retry storm  ",
+        )
+    )
+
+    assert firmware.size_bytes == len(data)
+    assert firmware.notes == "Fix SNTP retry storm"
+
+
+def test_execute_normalizes_blank_notes_to_none(keypair):
+    _, private_pem = keypair
+    repo, storage = FakeFirmwareRepository(), FakeStorage()
+    use_case = UploadFirmware(repo, storage, private_pem)
+
+    firmware = use_case.execute(
+        UploadFirmwareRequest(
+            model="ESP32",
+            version="1.0.0",
+            original_filename="firmware.bin",
+            data=valid_image(),
+            notes="   ",
+        )
+    )
+
+    assert firmware.notes is None
+
+
+def test_execute_records_no_notes_as_none(keypair):
+    _, private_pem = keypair
+    repo, storage = FakeFirmwareRepository(), FakeStorage()
+    use_case = UploadFirmware(repo, storage, private_pem)
+
+    firmware = use_case.execute(
+        UploadFirmwareRequest(
+            model="ESP32",
+            version="1.0.0",
+            original_filename="firmware.bin",
+            data=valid_image(),
+        )
+    )
+
+    assert firmware.notes is None
 
 
 def test_execute_keeps_the_stored_blob_when_the_version_is_taken(keypair):

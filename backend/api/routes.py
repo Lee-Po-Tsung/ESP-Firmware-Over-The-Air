@@ -229,6 +229,8 @@ class FirmwareResponse(_FromDomain):
     original_filename: str | None
     signature: str
     sha256: str
+    size_bytes: int
+    notes: str | None
     created_at: datetime
 
 
@@ -301,6 +303,7 @@ def upload(
     model: str = Form(...),
     version: str = Form(...),
     firmware: UploadFile = File(...),
+    notes: str | None = Form(None),
     use_case: UploadFirmware = Depends(get_upload_firmware),
 ) -> UploadResponse:
     data = firmware.file.read()
@@ -311,6 +314,7 @@ def upload(
                 version=version,
                 original_filename=firmware.filename or "firmware.bin",
                 data=data,
+                notes=notes,
             )
         )
     except (InvalidManifestField, InvalidFirmwareImage) as exc:

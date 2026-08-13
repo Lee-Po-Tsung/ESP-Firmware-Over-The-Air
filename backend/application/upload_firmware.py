@@ -22,6 +22,7 @@ class UploadFirmwareRequest:
     version: str
     original_filename: str
     data: bytes
+    notes: str | None = None
 
 
 class UploadFirmware:
@@ -68,5 +69,9 @@ class UploadFirmware:
                 original_filename=req.original_filename,
                 signature=signature,
                 sha256=sha256_hex,
+                size_bytes=len(req.data),
+                # Absent and blank collapse to null, so the dashboard has one
+                # empty case to render rather than two that look the same.
+                notes=(req.notes or "").strip() or None,
             )
         )

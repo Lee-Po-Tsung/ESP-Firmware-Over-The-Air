@@ -30,8 +30,22 @@ def seed_user(repo: FakeUserRepository, username: str, password: str, role: Role
 class FakeUploadFirmware:
     def execute(self, req) -> Firmware:
         return Firmware(
-            model=req.model, version=req.version, filename="f.bin", signature="s", sha256="a" * 64
+            model=req.model,
+            version=req.version,
+            filename="f.bin",
+            signature="s",
+            sha256="a" * 64,
+            size_bytes=0,
         )
+
+
+class RecordingUploadFirmware(FakeUploadFirmware):
+    def __init__(self) -> None:
+        self.req = None
+
+    def execute(self, req) -> Firmware:
+        self.req = req
+        return super().execute(req)
 
 
 class FakeUploadFirmwareTakenVersion:
@@ -181,6 +195,42 @@ def test_upload_succeeds_for_admin(users, client):
 
     assert res.status_code == 200
     assert res.json() == {"status": "ok"}
+
+
+def test_upload_carries_notes_through_to_the_use_case(users, client):
+    """The form field name is the whole contract here.
+
+    Normalizing blank notes is the use case's job and tested there. What only
+    the route can get wrong is the name Pydantic binds the field under, and a
+    typo there silently drops every note the admin types.
+    """
+    seed_user(users, "admin", "pw", Role.ADMIN)
+    use_case = RecordingUploadFirmware()
+    app.dependency_overrides[get_upload_firmware] = lambda: use_case
+    token = login(client, "admin", "pw")
+
+    res = client.post(
+        "/firmware/upload",
+        files=upload_files() | {"notes": (None, "Fix SNTP retry storm")},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert res.status_code == 200
+    assert use_case.req.notes == "Fix SNTP retry storm"
+
+
+def test_upload_without_notes_reaches_the_use_case_as_none(users, client):
+    seed_user(users, "admin", "pw", Role.ADMIN)
+    use_case = RecordingUploadFirmware()
+    app.dependency_overrides[get_upload_firmware] = lambda: use_case
+    token = login(client, "admin", "pw")
+
+    res = client.post(
+        "/firmware/upload", files=upload_files(), headers={"Authorization": f"Bearer {token}"}
+    )
+
+    assert res.status_code == 200
+    assert use_case.req.notes is None
 
 
 def test_upload_conflicts_on_a_version_already_stored(users, client):

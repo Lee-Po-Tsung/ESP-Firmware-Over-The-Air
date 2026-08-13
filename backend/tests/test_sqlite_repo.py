@@ -31,7 +31,12 @@ def session():
 
 def make_firmware(model="ESP32", version="1.0.0", sha256="a" * 64) -> Firmware:
     return Firmware(
-        model=model, version=version, filename=f"{version}.bin", signature="sig", sha256=sha256
+        model=model,
+        version=version,
+        filename=f"{version}.bin",
+        signature="sig",
+        sha256=sha256,
+        size_bytes=1,
     )
 
 
