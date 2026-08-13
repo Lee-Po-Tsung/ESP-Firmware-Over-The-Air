@@ -47,6 +47,7 @@ def _to_firmware(row: FirmwareRow) -> Firmware:
         sha256=row.sha256,
         size_bytes=row.size_bytes,
         notes=row.notes,
+        active=row.active,
         created_at=_utc(row.created_at),
     )
 
@@ -137,11 +138,24 @@ class SqliteFirmwareRepository(FirmwareRepository):
         return _to_firmware(row) if row else None
 
     def get_latest_for_model(self, model: str) -> Firmware | None:
-        rows = self._session.scalars(select(FirmwareRow).where(FirmwareRow.model == model)).all()
+        rows = self._session.scalars(
+            select(FirmwareRow).where(FirmwareRow.model == model, FirmwareRow.active)
+        ).all()
         if not rows:
             return None
         latest = max(rows, key=lambda r: (parse_version(r.version), r.id))
         return _to_firmware(latest)
+
+    def deactivate(self, firmware_id: int) -> Firmware | None:
+        row = self._session.get(FirmwareRow, firmware_id)
+        if row is None:
+            return None
+        # Set unconditionally rather than branching on the current value, so a
+        # second call still succeeds with the row unchanged.
+        row.active = False
+        self._session.commit()
+        self._session.refresh(row)
+        return _to_firmware(row)
 
     def list_all(self) -> list[Firmware]:
         rows = self._session.scalars(

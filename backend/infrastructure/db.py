@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from config import get_settings
-from sqlalchemy import DateTime, Index, Integer, String, create_engine
+from sqlalchemy import Boolean, DateTime, Index, Integer, String, create_engine
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker
 
@@ -38,6 +38,9 @@ class FirmwareRow(Base):
     original_filename: Mapped[str | None] = mapped_column(String, nullable=True)
     size_bytes: Mapped[int] = mapped_column(Integer, nullable=False)
     notes: Mapped[str | None] = mapped_column(String, nullable=True)
+    # Mapper default: `sqlite_repo.add` does not pass `active`, and a freshly
+    # uploaded firmware is always live.
+    active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     signature: Mapped[str] = mapped_column(String, nullable=False)
     sha256: Mapped[str] = mapped_column(String, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, nullable=False)

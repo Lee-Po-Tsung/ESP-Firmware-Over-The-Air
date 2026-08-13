@@ -98,10 +98,17 @@ class FakeFirmwareRepository(FirmwareRepository):
         return next((f for f in self.rows if f.model == model and f.sha256 == sha256), None)
 
     def get_latest_for_model(self, model: str) -> Firmware | None:
-        candidates = [f for f in self.rows if f.model == model]
+        candidates = [f for f in self.rows if f.model == model and f.active]
         if not candidates:
             return None
         return max(candidates, key=lambda f: (parse_version(f.version), f.id or 0))
+
+    def deactivate(self, firmware_id: int) -> Firmware | None:
+        firmware = self.get_by_id(firmware_id)
+        if firmware is None:
+            return None
+        firmware.active = False
+        return firmware
 
     def list_all(self) -> list[Firmware]:
         # Insertion order. Ordering is SQL's job and is covered against the real

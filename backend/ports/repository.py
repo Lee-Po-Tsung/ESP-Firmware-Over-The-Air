@@ -49,6 +49,10 @@ class FirmwareBinaryAlreadyExists(Exception):
         self.existing_version = existing_version
 
 
+class FirmwareNotFound(Exception):
+    """Raised when a firmware operation targets an id that has no row."""
+
+
 class FirmwareRepository(ABC):
     @abstractmethod
     def add(self, firmware: Firmware) -> Firmware:
@@ -71,7 +75,15 @@ class FirmwareRepository(ABC):
 
     @abstractmethod
     def get_latest_for_model(self, model: str) -> Firmware | None:
-        """Return the newest firmware for a model, or None if none exist."""
+        """Return the newest active firmware for a model, or None if none exist."""
+
+    @abstractmethod
+    def deactivate(self, firmware_id: int) -> Firmware | None:
+        """Clear `active` on a firmware row and return it, or None if unknown.
+
+        Idempotent: deactivating an already-inactive row changes nothing and
+        still returns the row.
+        """
 
     @abstractmethod
     def list_all(self) -> list[Firmware]:

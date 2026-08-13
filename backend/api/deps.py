@@ -11,6 +11,7 @@ from collections.abc import Iterator
 
 from application.auth import AuthenticateUser, RegisterUser
 from application.check_update import CheckUpdate
+from application.deactivate_firmware import DeactivateFirmware
 from application.upload_firmware import UploadFirmware
 from config import Settings, get_settings
 from domain import auth
@@ -68,6 +69,12 @@ def get_upload_firmware(
     settings: Settings = Depends(get_settings),
 ) -> UploadFirmware:
     return UploadFirmware(repo, storage, settings.read_private_key())
+
+
+def get_deactivate_firmware(
+    repo: FirmwareRepository = Depends(get_firmware_repository),
+) -> DeactivateFirmware:
+    return DeactivateFirmware(repo)
 
 
 def get_register_user(repo: UserRepository = Depends(get_user_repository)) -> RegisterUser:

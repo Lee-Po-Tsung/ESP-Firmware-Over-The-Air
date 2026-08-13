@@ -20,6 +20,7 @@ from urllib.parse import quote
 
 from application.auth import AuthenticateUser, InvalidCredentials, RegisterUser, RegisterUserRequest
 from application.check_update import CheckUpdate, CheckUpdateRequest, ModelNotFound
+from application.deactivate_firmware import DeactivateFirmware
 from application.upload_firmware import UploadFirmware, UploadFirmwareRequest
 from domain import fleet
 from domain.auth import InvalidCredentialFormat
@@ -32,6 +33,7 @@ from ports.repository import (
     DeviceRepository,
     FirmwareAlreadyExists,
     FirmwareBinaryAlreadyExists,
+    FirmwareNotFound,
     FirmwareRepository,
     UserAlreadyExists,
 )
@@ -42,6 +44,7 @@ from api.deps import (
     get_authenticate_user,
     get_check_update,
     get_current_user,
+    get_deactivate_firmware,
     get_device_repository,
     get_firmware_repository,
     get_register_user,
@@ -231,6 +234,7 @@ class FirmwareResponse(_FromDomain):
     sha256: str
     size_bytes: int
     notes: str | None
+    active: bool
     created_at: datetime
 
 
@@ -332,3 +336,15 @@ def upload(
             detail="Version already exists for this model",
         ) from exc
     return UploadResponse(status="ok")
+
+
+@router.post("/api/firmware/{firmware_id}/deactivate", dependencies=[Depends(require_admin)])
+def deactivate_firmware(
+    firmware_id: int,
+    use_case: DeactivateFirmware = Depends(get_deactivate_firmware),
+) -> FirmwareResponse:
+    try:
+        firmware = use_case.execute(firmware_id)
+    except FirmwareNotFound as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND) from exc
+    return FirmwareResponse.model_validate(firmware)

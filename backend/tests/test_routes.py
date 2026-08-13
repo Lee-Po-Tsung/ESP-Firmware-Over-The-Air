@@ -230,6 +230,17 @@ def test_firmware_list_api_returns_size_and_notes(client):
     assert response.json()[0]["notes"] == "Fix SNTP retry storm"
 
 
+def test_firmware_list_api_carries_active_flag(client):
+    firmware = make_firmware(firmware_id=1)
+    app.dependency_overrides[get_firmware_repository] = lambda: FakeFirmwareRepository([firmware])
+    app.dependency_overrides[get_current_user] = lambda: make_operator()
+
+    response = client.get("/api/firmware/list")
+
+    assert response.status_code == 200
+    assert response.json()[0]["active"] is True
+
+
 def test_firmware_list_created_at_carries_a_utc_offset(client):
     """The two list routes used to disagree, and only one of them was right.
 

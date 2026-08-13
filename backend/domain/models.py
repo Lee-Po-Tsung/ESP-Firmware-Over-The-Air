@@ -50,6 +50,9 @@ class Firmware:
 
     `size_bytes` and `notes` are dashboard display metadata and never enter the
     signed manifest, which stays `model|version|sha256`.
+
+    `active` is the publish state. A withdrawn version keeps its row so the
+    dashboard can show history, but `get_latest_for_model` never offers it.
     """
 
     model: str
@@ -59,6 +62,7 @@ class Firmware:
     sha256: str
     size_bytes: int
     notes: str | None = None
+    active: bool = True
     original_filename: str | None = None
     id: int | None = None
     created_at: datetime | None = None
