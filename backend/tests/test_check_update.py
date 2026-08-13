@@ -17,7 +17,7 @@ def make_request(model="ESP32", version="1.0.0", **overrides) -> CheckUpdateRequ
     return CheckUpdateRequest(model=model, version=version, **overrides)
 
 
-def make_firmware(model="ESP32", version="1.1.0", firmware_id=7) -> Firmware:
+def make_firmware(model="ESP32", version="1.1.0", firmware_id=7, active=True) -> Firmware:
     return Firmware(
         model=model,
         version=version,
@@ -26,6 +26,7 @@ def make_firmware(model="ESP32", version="1.1.0", firmware_id=7) -> Firmware:
         sha256="a" * 64,
         size_bytes=1,
         id=firmware_id,
+        active=active,
     )
 
 
@@ -45,6 +46,35 @@ def test_execute_reports_no_update_when_current_version_is_latest():
     assert result.update_available is False
     assert result.version is None
     assert result.download_url is None
+
+
+def test_execute_reports_no_update_when_latest_version_is_deactivated():
+    """A withdrawn 1.0.1 must not be offered, but the model still exists.
+
+    `get_latest_for_model` falls back to the newest active row, so the device
+    on 1.0.0 gets a plain no-update, not a 403 and not a download.
+    """
+    older = make_firmware(version="1.0.0", firmware_id=1)
+    withdrawn = make_firmware(version="1.0.1", firmware_id=2, active=False)
+    use_case = make_use_case([older, withdrawn])
+
+    result = use_case.execute(make_request(version="1.0.0"))
+
+    assert result.update_available is False
+    assert result.version is None
+    assert result.download_url is None
+
+
+def test_execute_raises_when_every_version_is_inactive():
+    use_case = make_use_case(
+        [
+            make_firmware(version="1.0.0", firmware_id=1, active=False),
+            make_firmware(version="1.0.1", firmware_id=2, active=False),
+        ]
+    )
+
+    with pytest.raises(ModelNotFound):
+        use_case.execute(make_request())
 
 
 def test_execute_reports_update_with_signature_and_download_url():

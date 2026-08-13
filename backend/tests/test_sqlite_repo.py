@@ -48,6 +48,7 @@ def test_add_assigns_id_and_persists_fields(session):
     assert added.id is not None
     fetched = repo.get_by_id(added.id)
     assert fetched == added
+    assert fetched.active is True
 
 
 def test_get_by_id_returns_none_when_missing(session):
@@ -146,6 +147,62 @@ def test_list_all_orders_newest_first(session):
     listed = repo.list_all()
 
     assert [f.id for f in listed] == [second.id, first.id]
+
+
+def test_get_latest_for_model_skips_inactive_row(session):
+    repo = SqliteFirmwareRepository(session)
+    repo.add(make_firmware(version="1.0.0"))
+    newest = repo.add(make_firmware(version="1.1.0"))
+
+    repo.deactivate(newest.id)
+
+    latest = repo.get_latest_for_model("ESP32")
+    assert latest is not None
+    assert latest.version == "1.0.0"
+
+
+def test_get_latest_for_model_returns_none_when_every_row_inactive(session):
+    repo = SqliteFirmwareRepository(session)
+    first = repo.add(make_firmware(version="1.0.0"))
+    second = repo.add(make_firmware(version="1.1.0"))
+    repo.deactivate(first.id)
+    repo.deactivate(second.id)
+
+    assert repo.get_latest_for_model("ESP32") is None
+
+
+def test_list_all_still_returns_inactive_rows(session):
+    repo = SqliteFirmwareRepository(session)
+    repo.add(make_firmware(version="1.0.0"))
+    second = repo.add(make_firmware(version="1.1.0"))
+
+    repo.deactivate(second.id)
+
+    listed = repo.list_all()
+
+    assert len(listed) == 2
+    assert {f.active for f in listed} == {True, False}
+
+
+def test_deactivate_returns_updated_row_and_is_idempotent(session):
+    repo = SqliteFirmwareRepository(session)
+    added = repo.add(make_firmware())
+
+    first = repo.deactivate(added.id)
+    second = repo.deactivate(added.id)
+
+    assert first is not None
+    assert first.id == added.id
+    assert first.active is False
+    assert second is not None
+    assert second.id == added.id
+    assert second.active is False
+
+
+def test_deactivate_returns_none_for_unknown_id(session):
+    repo = SqliteFirmwareRepository(session)
+
+    assert repo.deactivate(999) is None
 
 
 def test_device_upsert_inserts_then_updates_same_device(session):

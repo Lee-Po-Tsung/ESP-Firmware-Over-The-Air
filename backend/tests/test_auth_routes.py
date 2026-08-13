@@ -7,12 +7,18 @@ prove the role gate: no token is 401, an operator is 403, an admin succeeds.
 from __future__ import annotations
 
 import io
+from datetime import datetime, timezone
 
 import pytest
-from api.deps import get_authenticate_user, get_upload_firmware, get_user_repository
+from api.deps import (
+    get_authenticate_user,
+    get_firmware_repository,
+    get_upload_firmware,
+    get_user_repository,
+)
 from application.auth import AuthenticateUser
 from config import get_settings
-from conftest import FakeUserRepository
+from conftest import FakeFirmwareRepository, FakeUserRepository
 from domain import auth
 from domain.firmware_image import InvalidFirmwareImage
 from domain.models import Firmware, Role, User
@@ -25,6 +31,20 @@ from ports.repository import FirmwareAlreadyExists, FirmwareBinaryAlreadyExists
 def seed_user(repo: FakeUserRepository, username: str, password: str, role: Role) -> User:
     """Add an account with a real bcrypt hash, so login goes through the real check."""
     return repo.add(User(username=username, password_hash=auth.hash_password(password), role=role))
+
+
+def make_firmware(firmware_id=1) -> Firmware:
+    return Firmware(
+        model="ESP32",
+        version="1.0.0",
+        filename="f.bin",
+        original_filename="f.bin",
+        signature="s",
+        sha256="a" * 64,
+        size_bytes=1,
+        id=firmware_id,
+        created_at=datetime(2026, 7, 15, 12, 0, 0, tzinfo=timezone.utc),
+    )
 
 
 class FakeUploadFirmware:
@@ -283,3 +303,57 @@ def test_upload_conflicts_on_a_binary_already_stored(users, client):
 
     assert res.status_code == 409
     assert "1.0.2" in res.json()["detail"]
+
+
+def test_deactivate_requires_a_token(client):
+    res = client.post("/api/firmware/1/deactivate")
+
+    assert res.status_code == 401
+
+
+def test_deactivate_forbidden_for_operator(users, client):
+    seed_user(users, "op", "pw", Role.OPERATOR)
+    token = login(client, "op", "pw")
+
+    res = client.post("/api/firmware/1/deactivate", headers={"Authorization": f"Bearer {token}"})
+
+    assert res.status_code == 403
+
+
+def test_deactivate_clears_active_for_admin(users, client):
+    seed_user(users, "admin", "pw", Role.ADMIN)
+    app.dependency_overrides[get_firmware_repository] = lambda: FakeFirmwareRepository(
+        [make_firmware()]
+    )
+    token = login(client, "admin", "pw")
+
+    res = client.post("/api/firmware/1/deactivate", headers={"Authorization": f"Bearer {token}"})
+
+    assert res.status_code == 200
+    assert res.json()["active"] is False
+
+
+def test_deactivate_is_idempotent(users, client):
+    seed_user(users, "admin", "pw", Role.ADMIN)
+    app.dependency_overrides[get_firmware_repository] = lambda: FakeFirmwareRepository(
+        [make_firmware()]
+    )
+    token = login(client, "admin", "pw")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    first = client.post("/api/firmware/1/deactivate", headers=headers)
+    second = client.post("/api/firmware/1/deactivate", headers=headers)
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert second.json()["active"] is False
+
+
+def test_deactivate_returns_404_for_unknown_id(users, client):
+    seed_user(users, "admin", "pw", Role.ADMIN)
+    app.dependency_overrides[get_firmware_repository] = lambda: FakeFirmwareRepository()
+    token = login(client, "admin", "pw")
+
+    res = client.post("/api/firmware/999/deactivate", headers={"Authorization": f"Bearer {token}"})
+
+    assert res.status_code == 404
