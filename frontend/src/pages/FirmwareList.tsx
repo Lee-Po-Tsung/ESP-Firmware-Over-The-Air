@@ -11,12 +11,16 @@ interface Firmware {
   original_filename: string | null;
   signature: string;
   sha256: string;
+  active: boolean;
   created_at: string;
 }
 
 export default function FirmwareList() {
   const { session } = useAuth();
   const [firmwares, setfirmwares] = useState<Firmware[]>([]);
+  const [confirmingId, setConfirmingId] = useState<number | null>(null);
+  const [withdrawingId, setWithdrawingId] = useState<number | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
 
   useEffect(() => {
     if (!session) return;
@@ -30,6 +34,72 @@ export default function FirmwareList() {
       .then(setfirmwares)
       .catch(e => console.error("Failed to fetch firmwares:", e));
   }, [session]);
+
+  // Nothing is locked. Withdrawing the newest version is the whole point of the
+  // feature, and withdrawing one that devices are running harms nothing: no file
+  // is removed, so a download already in flight finishes and those devices keep
+  // running what they have.
+  //
+  // The one case worth warning about is a model losing its last active version.
+  // `get_latest_for_model` then finds nothing, `POST /api/check` answers 403 to
+  // every device of that model, and no amount of waiting fixes it. Recoverable
+  // by publishing again, so this warns rather than blocks.
+  function isLastActiveForModel(target: Firmware): boolean {
+    return firmwares.filter(fw => fw.model === target.model && fw.active).length === 1;
+  }
+
+  function openConfirm(id: number) {
+    setConfirmingId(id);
+    setMessage(null);
+  }
+
+  function cancelConfirm() {
+    setConfirmingId(null);
+    setMessage(null);
+  }
+
+  async function withdraw(id: number) {
+    setWithdrawingId(id);
+    setMessage(null);
+
+    try {
+      const res = await fetch(`/backend/api/firmware/${id}/deactivate`, {
+        method: 'POST',
+        headers: session ? { Authorization: `Bearer ${session.token}` } : undefined,
+      });
+
+      if (res.status === 401) {
+        setMessage('Session expired. Please log in again.');
+        return;
+      }
+      if (res.status === 403) {
+        setMessage('Only admin accounts can withdraw a version.');
+        return;
+      }
+      if (res.status === 404) {
+        setMessage('That version is no longer on record.');
+        return;
+      }
+      if (!res.ok) {
+        setMessage(`Withdraw failed (HTTP ${res.status})`);
+        return;
+      }
+
+      // The route answers with the updated row, so swap it in rather than
+      // refetching the list and racing the effect above.
+      const updated = await res.json() as Firmware;
+      setfirmwares(prev => prev.map(fw => (fw.id === updated.id ? updated : fw)));
+      setConfirmingId(null);
+    } catch {
+      setMessage('Cannot reach backend. Please make sure API server is running on port 1234.');
+    } finally {
+      setWithdrawingId(null);
+    }
+  }
+
+  // Absent rather than disabled: upload and withdraw are both admin-gated, and
+  // an operator has no path to either.
+  const canWithdraw = session?.role === 'admin';
 
   return (
     <div className="page-wrapper">
@@ -62,16 +132,73 @@ export default function FirmwareList() {
 
           <div className="firmware-stack">
             {firmwares.map(fw => (
-              <div key={fw.id} className="fw-row-card">
+              <div
+                key={fw.id}
+                className={fw.active ? 'fw-row-card' : 'fw-row-card fw-row-card-withdrawn'}
+              >
                 <div className="fw-row-header">
                   <div className="fw-identity">
                     <h3 className="fw-model">{fw.model}</h3>
                     <span className="fw-badge">{fw.version}</span>
+                    {/* Withdrawn versions stay in the list. Hiding them would make
+                        one indistinguishable from a version that never existed. */}
+                    {!fw.active && <span className="fw-badge fw-badge-withdrawn">Withdrawn</span>}
                   </div>
-                  <div className="fw-date">
-                    Uploaded: {new Date(fw.created_at).toLocaleString()}
+
+                  <div className="fw-row-meta">
+                    <div className="fw-date">
+                      Uploaded: {new Date(fw.created_at).toLocaleString()}
+                    </div>
+
+                    {canWithdraw && fw.active && confirmingId !== fw.id && (
+                      <button
+                        type="button"
+                        className="fw-withdraw-btn"
+                        onClick={() => openConfirm(fw.id)}
+                      >
+                        Withdraw
+                      </button>
+                    )}
                   </div>
                 </div>
+
+                {canWithdraw && fw.active && confirmingId === fw.id && (
+                  <div className="fw-confirm">
+                    <p className="fw-confirm-text">
+                      Stop offering {fw.version} to {fw.model} devices? The file stays on
+                      the server and devices already running it are untouched.
+                    </p>
+
+                    {isLastActiveForModel(fw) && (
+                      <p className="fw-confirm-warning">
+                        This is the last active version for {fw.model}. Every device of this
+                        model will get an error on its next check until you publish another
+                        version.
+                      </p>
+                    )}
+
+                    {message && <p className="fw-confirm-error">{message}</p>}
+
+                    <div className="fw-confirm-actions">
+                      <button
+                        type="button"
+                        className="fw-confirm-btn"
+                        onClick={() => withdraw(fw.id)}
+                        disabled={withdrawingId === fw.id}
+                      >
+                        {withdrawingId === fw.id ? 'Withdrawing...' : 'Confirm withdraw'}
+                      </button>
+                      <button
+                        type="button"
+                        className="fw-cancel-btn"
+                        onClick={cancelConfirm}
+                        disabled={withdrawingId === fw.id}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
 
                 <div className="fw-details-grid">
                   <div className="fw-detail-item">
