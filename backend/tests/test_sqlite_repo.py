@@ -70,8 +70,8 @@ def test_get_latest_for_model_picks_highest_dotted_version(session):
 
 def test_get_latest_for_model_breaks_version_tie_by_newest_row(session):
     repo = SqliteFirmwareRepository(session)
-    # Distinct versions can still parse to the same tuple -- the parser reads at
-    # most three segments and stops at the first non-digit -- so the tie-break
+    # Distinct versions can still parse to the same tuple: the parser reads at
+    # most three segments and stops at the first non-digit. So the tie-break
     # picks the later upload rather than depending on the query's row order.
     first = repo.add(make_firmware(version="1.2.3"))
     second = repo.add(make_firmware(version="1.2.3.4"))

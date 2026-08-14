@@ -53,7 +53,7 @@ KNOWN_CHIP_IDS = frozenset(
     }
 )
 
-# A sanity floor, not a format requirement -- a real image runs to hundreds of
+# A sanity floor, not a format requirement. A real image runs to hundreds of
 # kilobytes. It also keeps the fixed offsets above in bounds.
 MIN_FIRMWARE_BYTES = 1024
 
@@ -90,7 +90,7 @@ def validate_image(data: bytes) -> None:
     if chip_id not in KNOWN_CHIP_IDS:
         raise InvalidFirmwareImage(f"Image targets unknown chip id 0x{chip_id:04X}")
 
-    # ESP-IDF's "simple hash", scoped to corruption only -- a secure-boot
+    # ESP-IDF's "simple hash", scoped to corruption only. A secure-boot
     # signature, where there is one, sits after it.
     if data[HASH_APPENDED_OFFSET] == 1:
         body, digest = data[:-IMAGE_DIGEST_BYTES], data[-IMAGE_DIGEST_BYTES:]
