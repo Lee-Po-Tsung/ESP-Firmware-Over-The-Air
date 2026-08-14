@@ -18,7 +18,7 @@ export default defineConfig(({ mode }) => {
           // The backend serves a self-signed TLS cert until M5 puts a real
           // proxy in front, so skip cert verification here.
           secure: false,
-          rewrite: (path) => path.replace(/^\/backend/, '') // 移除路徑中的 /backend
+          rewrite: (path) => path.replace(/^\/backend/, '') // strip the /backend prefix
         }
       }
     }

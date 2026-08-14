@@ -1,6 +1,6 @@
 """Interface for storing and retrieving firmware binary files.
 
-Four operations over a filename — put, get, delete, exists.
+Four operations over a filename: put, get, delete, exists.
 `infrastructure/local_storage.py` implements it against the local disk.
 """
 

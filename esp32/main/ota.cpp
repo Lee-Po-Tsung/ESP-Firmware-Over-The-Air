@@ -140,7 +140,7 @@ bool readAppendedDigest(const char* path, uint8_t out[IMAGE_DIGEST_BYTES]) {
 }
 
 // Whether a downloaded image is byte-for-byte the running app. Compares the
-// appended digest, which is what esp_partition_get_sha256() returns -- not the
+// appended digest, which is what esp_partition_get_sha256() returns, not the
 // manifest sha256, which covers the whole file and so never equals it.
 //
 // Docs:
@@ -449,11 +449,8 @@ int parseVersionSegments(const String& v, int out[3]) {
 
 // Check if v1 is newer than v2. Returns true if v1 > v2.
 //
-// Mirrors the server's tuple compare (domain/signing.compare_version and
-// sqlite_repo._version_key both do `list(map(int, v.split(".", 2)))`): a
-// version that is a strict prefix of another, e.g. "1.2" vs "1.2.0", compares
-// as older rather than equal, since Python compares lists of different
-// lengths that way.
+// A version that is a strict prefix of another, e.g. "1.2" vs "1.2.0",
+// compares as older rather than equal.
 bool isVersionNewer(const String& v1, const String& v2) {
     int seg1[3];
     int seg2[3];
