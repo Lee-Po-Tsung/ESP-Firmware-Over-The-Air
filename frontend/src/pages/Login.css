@@ -180,3 +180,19 @@
   text-align: left;
   width: min(460px, 100%);
 }
+
+@media (max-width: 640px) {
+  .login-page {
+    padding: 1.25rem;
+  }
+  .login-card {
+    padding: 1.5rem;
+  }
+  .login-header h1 {
+    font-size: 1.75rem;
+  }
+  .login-brand {
+    margin-bottom: 1rem;
+  }
+}
+

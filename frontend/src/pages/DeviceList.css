@@ -318,6 +318,11 @@
   font-weight: 500;
 }
 
+.dev-table-wrapper {
+  width: 100%;
+  overflow-x: auto;
+}
+
 @media (max-width: 1024px) {
   .dev-summary-cards {
     grid-template-columns: repeat(2, 1fr);
@@ -325,16 +330,33 @@
 }
 
 @media (max-width: 640px) {
+  .dev-header-area {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.8rem;
+  }
   .dev-summary-cards {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .dev-card {
+    padding: 1rem;
+  }
+  .dev-card-value {
+    font-size: 1.8rem;
   }
   .dev-table-toolbar {
     flex-direction: column;
     align-items: flex-start;
     gap: 1rem;
   }
+  .dev-search-box {
+    width: 100%;
+  }
   .dev-table-filters {
     width: 100%;
     justify-content: space-between;
+  }
+  .dev-table {
+    min-width: 600px;
   }
 }

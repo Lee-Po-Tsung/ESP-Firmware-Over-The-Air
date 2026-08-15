@@ -197,7 +197,7 @@
   box-shadow: 0 8px 16px rgba(17, 24, 39, 0.12);
 }
 
-@media (max-width: 768px) {
+@media (max-width: 1200px) {
   .upload-container {
     flex: 1 1 100%;
     max-width: 100%;

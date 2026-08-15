@@ -8,6 +8,7 @@ export default function FirmwareUpload() {
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [selectedFileName, setSelectedFileName] = useState<string>('');
+  console.log(selectedFileName); // temp ignore elint
 
   async function handleSubmit(event: React.SubmitEvent<HTMLFormElement>) {
     event.preventDefault();

@@ -252,48 +252,50 @@ export default function DeviceList() {
           </div>
         </div>
 
-        <table className="dev-table">
-          <thead>
-            <tr>
-              <th>裝置</th>
-              <th>韌體</th>
-              <th>訊號</th>
-              <th>最後回報</th>
-              <th>狀態</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredDevices.map(d => (
-              <tr key={d.id}>
-                <td className="dev-col-device">
-                  <div className="dev-device-info">
-                    <span className={`dev-status-dot ${d.status === 'online' ? 'dot-green' : 'dot-red'}`}></span>
-                    <div className="dev-device-text">
-                      <div className="dev-device-name">{d.id}</div>
-                      <div className="dev-device-meta">{d.model} · {d.ip} · {d.location}</div>
-                    </div>
-                  </div>
-                </td>
-                <td className="dev-col-fw">
-                  <span className="dev-fw-text">{d.current_version}</span>
-                </td>
-                <td className="dev-col-signal">
-                  {d.signal_dbm ? `${d.signal_dbm} dBm` : '—'}
-                </td>
-                <td className="dev-col-seen">
-                  {d.last_seen}
-                </td>
-                <td className="dev-col-status">
-                  {d.status === 'online' ? (
-                    <span className="dev-badge-online">在線</span>
-                  ) : (
-                    <span className="dev-badge-offline">離線</span>
-                  )}
-                </td>
+        <div className="dev-table-wrapper">
+          <table className="dev-table">
+            <thead>
+              <tr>
+                <th>裝置</th>
+                <th>韌體</th>
+                <th>訊號</th>
+                <th>最後回報</th>
+                <th>狀態</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {filteredDevices.map(d => (
+                <tr key={d.id}>
+                  <td className="dev-col-device">
+                    <div className="dev-device-info">
+                      <span className={`dev-status-dot ${d.status === 'online' ? 'dot-green' : 'dot-red'}`}></span>
+                      <div className="dev-device-text">
+                        <div className="dev-device-name">{d.id}</div>
+                        <div className="dev-device-meta">{d.model} · {d.ip} · {d.location}</div>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="dev-col-fw">
+                    <span className="dev-fw-text">{d.current_version}</span>
+                  </td>
+                  <td className="dev-col-signal">
+                    {d.signal_dbm ? `${d.signal_dbm} dBm` : '—'}
+                  </td>
+                  <td className="dev-col-seen">
+                    {d.last_seen}
+                  </td>
+                  <td className="dev-col-status">
+                    {d.status === 'online' ? (
+                      <span className="dev-badge-online">在線</span>
+                    ) : (
+                      <span className="dev-badge-offline">離線</span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );
