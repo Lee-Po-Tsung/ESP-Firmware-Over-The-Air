@@ -10,16 +10,18 @@ interface Firmware {
   sha256: string;
   created_at: string;
   size?: number;
-  devices_using?: number; // 有多少台裝置在使用
+  devices_using?: number;
 }
 
-export default function FirmwareList({groupedFirmwares}: {groupedFirmwares:{
+export default function FirmwareList({ groupedFirmwares }: {
+  groupedFirmwares: {
     model: string;
     items: Firmware[];
     latest: Firmware;
     count: number;
     totalDevices: number;
-}[]}) {
+  }[]
+}) {
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const [hasInitialized, setHasInitialized] = useState(false);
 
@@ -90,7 +92,7 @@ export default function FirmwareList({groupedFirmwares}: {groupedFirmwares:{
             ) : (
               groupedFirmwares.map((group) => {
                 const isExpanded = expandedGroups.has(group.model);
-                
+
                 return (
                   <div key={group.model} className="fw-group-card">
                     <div className="fw-group-header">
@@ -134,14 +136,14 @@ export default function FirmwareList({groupedFirmwares}: {groupedFirmwares:{
                                 ) : isDeleting ? (
                                   <div className="fw-delete-confirm">
                                     <span className="fw-delete-warning">刪除後無法復原</span>
-                                    <button 
+                                    <button
                                       className="fw-confirm-btn"
                                       onClick={() => handleDeleteConfirm(item.id, group.model, item.version)}
                                       disabled={deleting}
                                     >
                                       確定刪除
                                     </button>
-                                    <button 
+                                    <button
                                       className="fw-cancel-btn"
                                       onClick={handleDeleteCancel}
                                       disabled={deleting}
@@ -150,7 +152,7 @@ export default function FirmwareList({groupedFirmwares}: {groupedFirmwares:{
                                     </button>
                                   </div>
                                 ) : (
-                                  <button 
+                                  <button
                                     className="fw-delete-btn"
                                     onClick={() => handleDeleteClick(item.id)}
                                   >

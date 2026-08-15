@@ -4,26 +4,21 @@ import { useAuth } from '../auth/context';
 import './Login.css';
 
 export default function Login() {
-  const { login, register } = useAuth();
+  const { login } = useAuth();
   const navigate = useNavigate();
-  const [mode, setMode] = useState<'login' | 'register'>('login');
-  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [remember, setRemember] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  const registering = mode === 'register';
-
-  async function handleSubmit(event: React.SubmitEvent<HTMLFormElement>) {
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSubmitting(true);
     setError(null);
 
     try {
-      if (registering) {
-        await register(username, password);
-      }
-      await login(username, password);
+      await login(email, password);
       navigate('/');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Request failed');
@@ -32,67 +27,70 @@ export default function Login() {
     }
   }
 
-  function switchMode() {
-    setMode(registering ? 'login' : 'register');
-    setError(null);
-  }
-
   return (
     <div className="login-page">
+      <div className="login-brand">
+        <div className="login-logo">ESP</div>
+        <div className="login-brand-text">
+          <div className="login-brand-title">ESPFleet</div>
+          <div className="login-brand-subtitle">韌體發佈與裝置監控</div>
+        </div>
+      </div>
+
       <div className="login-card">
         <div className="login-header">
-          <h1>{registering ? 'Create Account' : 'Welcome Back'}</h1>
+          <h1>登入控制台</h1>
           <p>
-            {registering
-              ? 'Register an account to browse firmware releases.'
-              : 'Sign in to manage firmware releases for your devices.'}
+            用你的工作帳號登入，即可管理韌體版本並查看所有裝置的即時狀態。
           </p>
         </div>
 
         <form className="login-form" onSubmit={handleSubmit}>
           <label className="login-field">
-            Username
+            電子郵件
             <input
-              type="text"
-              value={username}
-              onChange={e => setUsername(e.target.value)}
+              type="email"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
               autoComplete="username"
               required
             />
           </label>
 
           <label className="login-field">
-            Password
+            密碼
             <input
               type="password"
               value={password}
               onChange={e => setPassword(e.target.value)}
-              autoComplete={registering ? 'new-password' : 'current-password'}
-              minLength={registering ? 8 : undefined}
+              autoComplete="current-password"
               required
             />
           </label>
 
+          <div className="login-form-actions">
+            <label className="login-remember">
+              <input
+                type="checkbox"
+                checked={remember}
+                onChange={e => setRemember(e.target.checked)}
+              />
+              記住這台電腦
+            </label>
+            <a href="#" className="login-forgot">忘記密碼？</a>
+          </div>
+
           {error && <p className="login-error">{error}</p>}
 
           <button type="submit" className="login-submit" disabled={submitting}>
-            {registering ? 'Create Account' : 'Sign In'}
+            登入
           </button>
         </form>
-
-        <p className="login-note">
-          {registering ? 'Already have an account? ' : 'New here? '}
-          <button type="button" className="login-switch" onClick={switchMode}>
-            {registering ? 'Sign in' : 'Create an account'}
-          </button>
-        </p>
-
-        {registering && (
-          <p className="login-note">
-            Self-signup creates an operator account; firmware upload stays admin-only.
-          </p>
-        )}
       </div>
+
+      <p className="login-footer">
+        還沒有帳號？請聯絡你的組織管理員。
+      </p>
     </div>
   );
 }

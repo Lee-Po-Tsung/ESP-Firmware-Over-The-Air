@@ -5,15 +5,15 @@ import { useAuth } from '../auth/context';
 import "./Firmware.css"
 
 interface Firmware {
-  id: number;
-  model: string;
-  version: string;
-  filename: string;
-  signature: string;
-  sha256: string;
-  created_at: string;
-  size?: number; // Size in bytes
-  devices_using?: number;
+    id: number;
+    model: string;
+    version: string;
+    filename: string;
+    signature: string;
+    sha256: string;
+    created_at: string;
+    size?: number; // Size in bytes
+    devices_using?: number;
 }
 
 export default function Firmware() {
@@ -24,40 +24,40 @@ export default function Firmware() {
         const groups = new Map<string, Firmware[]>();
 
         for (const firmware of firmwares) {
-        const items = groups.get(firmware.model) ?? [];
-        items.push(firmware);
-        groups.set(firmware.model, items);
+            const items = groups.get(firmware.model) ?? [];
+            items.push(firmware);
+            groups.set(firmware.model, items);
         }
 
         return [...groups.entries()]
-        .map(([model, items]) => {
-            const sorted = [...items].sort(
-            (left, right) => new Date(right.created_at).getTime() - new Date(left.created_at).getTime(),
-            );
+            .map(([model, items]) => {
+                const sorted = [...items].sort(
+                    (left, right) => new Date(right.created_at).getTime() - new Date(left.created_at).getTime(),
+                );
 
-            return {
-            model,
-            items: sorted,
-            latest: sorted[0],
-            count: sorted.length,
-            totalDevices: sorted.reduce((sum, item) => sum + (item.devices_using ?? 0), 0),
-            };
-        })
-        .sort((left, right) => new Date(right.latest.created_at).getTime() - new Date(left.latest.created_at).getTime());
+                return {
+                    model,
+                    items: sorted,
+                    latest: sorted[0],
+                    count: sorted.length,
+                    totalDevices: sorted.reduce((sum, item) => sum + (item.devices_using ?? 0), 0),
+                };
+            })
+            .sort((left, right) => new Date(right.latest.created_at).getTime() - new Date(left.latest.created_at).getTime());
     }, [firmwares]);
 
     useEffect(() => {
         if (!session) return;
-        
+
         fetch('/backend/api/firmware/list', {
-        headers: { Authorization: `Bearer ${session.token}` },
+            headers: { Authorization: `Bearer ${session.token}` },
         })
-        .then(res => {
-            if (!res.ok) throw new Error(`Failed to fetch firmwares (HTTP ${res.status})`);
-            return res.json() as Promise<Firmware[]>;
-        })
-        .then(setfirmwares)
-        .catch(e => console.error("Failed to fetch firmwares:", e));
+            .then(res => {
+                if (!res.ok) throw new Error(`Failed to fetch firmwares (HTTP ${res.status})`);
+                return res.json() as Promise<Firmware[]>;
+            })
+            .then(setfirmwares)
+            .catch(e => console.error("Failed to fetch firmwares:", e));
     }, [session]);
 
     return (
