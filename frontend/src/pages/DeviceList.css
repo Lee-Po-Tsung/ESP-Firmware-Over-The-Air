@@ -57,14 +57,8 @@
 }
 
 .dev-card {
-  background: #ffffff;
-  border: 1px solid #e5dfd6;
-  border-radius: 0.5rem;
   padding: 1.2rem;
-  display: flex;
-  flex-direction: column;
   gap: 0.3rem;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.02);
 }
 
 .dev-card-title {
@@ -90,42 +84,9 @@
   color: #9ca3af;
 }
 
-.dev-alert-box {
-  background-color: #fbe6cd;
-  border-radius: 0.5rem;
-  padding: 1rem 1.2rem;
-  display: flex;
-  gap: 0.8rem;
-  align-items: flex-start;
-}
 
-.dev-alert-icon {
-  font-size: 1.1rem;
-  margin-top: 0.1rem;
-}
-
-.dev-alert-content {
-  display: flex;
-  flex-direction: column;
-  gap: 0.3rem;
-}
-
-.dev-alert-title {
-  font-weight: 600;
-  font-size: 0.9rem;
-  color: #8c5a1d;
-}
-
-.dev-alert-desc {
-  font-size: 0.85rem;
-  color: #8c5a1d;
-}
 
 .dev-table-container {
-  background: #ffffff;
-  border: 1px solid #e5dfd6;
-  border-radius: 0.5rem;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.02);
   display: flex;
   flex-direction: column;
 }
@@ -138,115 +99,13 @@
   border-bottom: 1px solid #e5dfd6;
 }
 
-.dev-search-box {
-  position: relative;
-  width: 250px;
-}
-
-.dev-search-icon {
-  position: absolute;
-  left: 0.8rem;
-  top: 50%;
-  transform: translateY(-50%);
-  font-size: 0.9rem;
-  color: #9ca3af;
-}
-
-.dev-search-box input {
-  width: 100%;
-  box-sizing: border-box;
-  padding: 0.5rem 0.8rem 0.5rem 2.2rem;
-  border: 1px solid #d1d5db;
-  border-radius: 0.4rem;
-  font-size: 0.85rem;
-  outline: none;
-  transition: border-color 0.2s;
-}
-
-.dev-search-box input:focus {
-  border-color: #9ca3af;
-}
-
 .dev-table-filters {
   display: flex;
   gap: 1.5rem;
 }
 
 .dev-filter-group {
-  display: flex;
-  flex-direction: column;
   gap: 0.4rem;
-}
-
-.dev-filter-label {
-  font-size: 0.75rem;
-  color: #6b7280;
-}
-
-.dev-select {
-  padding: 0.4rem 2rem 0.4rem 0.8rem;
-  border: 1px solid #d1d5db;
-  border-radius: 0.4rem;
-  font-size: 0.85rem;
-  background-color: #fff;
-  outline: none;
-  appearance: none;
-  background-image: url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%236b7280%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E");
-  background-repeat: no-repeat;
-  background-position: right 0.7rem top 50%;
-  background-size: 0.65rem auto;
-}
-
-.dev-segmented-control {
-  display: inline-flex;
-  background: #f3f4f6;
-  border-radius: 0.4rem;
-  padding: 0.15rem;
-}
-
-.dev-segmented-control button {
-  border: none;
-  background: transparent;
-  padding: 0.35rem 0.8rem;
-  font-size: 0.8rem;
-  color: #4b5563;
-  border-radius: 0.3rem;
-  cursor: pointer;
-}
-
-.dev-segmented-control button.active {
-  background: #ffffff;
-  color: #111827;
-  box-shadow: 0 1px 2px rgba(0,0,0,0.05);
-  font-weight: 500;
-}
-
-.dev-table {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-.dev-table th {
-  text-align: left;
-  font-size: 0.8rem;
-  color: #6b7280;
-  font-weight: 500;
-  padding: 0.8rem 1.2rem;
-  border-bottom: 1px solid #e5dfd6;
-}
-
-.dev-table td {
-  padding: 0.9rem 1.2rem;
-  border-bottom: 1px solid #f3f4f6;
-  vertical-align: middle;
-}
-
-.dev-table tbody tr:last-child td {
-  border-bottom: none;
-}
-
-.dev-table tbody tr:hover {
-  background-color: #faf9f8;
 }
 
 .dev-device-info {
@@ -297,25 +156,7 @@
   color: #6b7280;
 }
 
-.dev-badge-online {
-  display: inline-flex;
-  padding: 0.2rem 0.5rem;
-  font-size: 0.75rem;
-  color: #166534;
-  background-color: #dcfce7;
-  border-radius: 0.25rem;
-  font-weight: 500;
-}
 
-.dev-badge-offline {
-  display: inline-flex;
-  padding: 0.2rem 0.5rem;
-  font-size: 0.75rem;
-  color: #991b1b;
-  background-color: #fee2e2;
-  border-radius: 0.25rem;
-  font-weight: 500;
-}
 
 .dev-table-wrapper {
   width: 100%;
@@ -348,14 +189,8 @@
     align-items: flex-start;
     gap: 1rem;
   }
-  .dev-search-box {
-    width: 100%;
-  }
   .dev-table-filters {
     width: 100%;
     justify-content: space-between;
-  }
-  .dev-table {
-    min-width: 600px;
   }
 }

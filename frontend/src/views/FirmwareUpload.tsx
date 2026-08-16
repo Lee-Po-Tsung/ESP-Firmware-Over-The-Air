@@ -60,21 +60,20 @@ export default function FirmwareUpload() {
 
   return (
     <div className="upload-container">
-
-      <div className="upload-card">
+      <div className="card upload-card">
         <div className="upload-header">
           <h1>上傳新韌體</h1>
           <p>只接受 .bin 檔案；上傳後會自動簽署與發佈。</p>
         </div>
         <form ref={formRef} onSubmit={handleSubmit}>
           <div className="form-group">
-            <label className="field-label">韌體檔案 (.bin)</label>
-            <div className="file-input-wrapper">
+            <label className="form-label">韌體檔案 (.bin)</label>
+            <div className="dropzone">
               <input
                 id="firmware-file"
                 type="file"
                 name="firmware"
-                className="simple-file-input"
+                className="dropzone-input"
                 accept=".bin"
                 required
                 onChange={event => {
@@ -82,53 +81,49 @@ export default function FirmwareUpload() {
                   setSelectedFileName(file ? file.name : '');
                 }}
               />
-              <label htmlFor="firmware-file">
-                <div className="file-dropzone">
-                  <span className="file-dropzone-button">
-                    <span className="file-dropzone-plus">+</span>
-                    選擇 .bin 檔案
-                  </span>
-                  <span className="file-dropzone-hint">或拖曳檔案到這裡</span>
-                </div>
-              </label>
+              <div className="dropzone-content">
+                <span className="btn btn-secondary">
+                  + 選擇 .bin 檔案
+                </span>
+                <span className="form-help">或拖曳檔案到這裡</span>
+                <span className="form-help">單一檔案上限 8 MB</span>
+              </div>
             </div>
-            <span className="file-dropzone-meta">單一檔案上限 8 MB</span>
           </div>
 
           <div className="form-group">
-            <label>
-              裝置型號
-              <select name="model" defaultValue="ESP32-S3-DevKit" required className="form-select">
-                <option value="ESP32-S3-DevKit">ESP32-S3-DevKit</option>
-                <option value="ESP32-S3-Mini">ESP32-S3-Mini</option>
-                <option value="ESP8266-12F">ESP8266-12F</option>
-              </select>
-            </label>
+            <label className="form-label">裝置型號</label>
+            <select name="model" defaultValue="ESP32-S3-DevKit" required className="form-select">
+              <option value="ESP32-S3-DevKit">ESP32-S3-DevKit</option>
+              <option value="ESP32-S3-Mini">ESP32-S3-Mini</option>
+              <option value="ESP8266-12F">ESP8266-12F</option>
+            </select>
           </div>
 
           <div className="form-group">
-            <label>
-              版本號
-              <input type="text" name="version" placeholder="2.4.2" required />
-            </label>
-            <span className="version-meta">格式：主版號.次版號.修訂號</span>
+            <label className="form-label">版本號</label>
+            <input type="text" className="form-input" name="version" placeholder="2.4.2" required />
+            <span className="form-help">格式：主版號.次版號.修訂號</span>
           </div>
 
           <div className="form-group">
-            <label>
-              更新說明
-              <textarea
-                name="description"
-                className="text-area-input"
-                rows={4}
-                placeholder="這一版改了什麼？"
-              />
-            </label>
+            <label className="form-label">更新說明</label>
+            <textarea
+              name="description"
+              className="form-input"
+              rows={4}
+              placeholder="這一版改了什麼？"
+              style={{ resize: 'vertical' }}
+            />
           </div>
 
-          {message && <p className="help-text">{message}</p>}
+          {message && (
+            <div className={`alert ${message.includes('success') ? 'alert-info' : 'alert-error'}`}>
+              {message}
+            </div>
+          )}
 
-          <button type="submit" className="submit-btn" disabled={submitting}>
+          <button type="submit" className="btn btn-primary" style={{ width: '100%', marginTop: '0.9rem', padding: '0.82rem' }} disabled={submitting}>
             上傳並發佈
           </button>
         </form>

@@ -142,32 +142,29 @@ export default function DeviceList() {
       </div>
 
       {error && (
-        <div className="dev-alert-box" style={{ backgroundColor: '#fee2e2', marginBottom: '1rem' }}>
-          <div className="dev-alert-icon" style={{ color: '#991b1b' }}>⚠️</div>
-          <div className="dev-alert-content">
-            <div className="dev-alert-title" style={{ color: '#991b1b' }}>無法取得資料</div>
-            <div className="dev-alert-desc" style={{ color: '#991b1b' }}>{error}</div>
-          </div>
+        <div className="alert alert-error">
+          <span className="alert-title">無法取得資料：</span>
+          {error}
         </div>
       )}
 
       <div className="dev-summary-cards">
-        <div className="dev-card">
+        <div className="card dev-card">
           <div className="dev-card-title">在線</div>
           <div className="dev-card-value text-green">{onlineCount}</div>
           <div className="dev-card-desc">心跳正常</div>
         </div>
-        <div className="dev-card">
+        <div className="card dev-card">
           <div className="dev-card-title">離線</div>
           <div className="dev-card-value text-red">{offlineCount}</div>
           <div className="dev-card-desc">超過 60 秒未回報</div>
         </div>
-        <div className="dev-card">
+        <div className="card dev-card">
           <div className="dev-card-title">更新中</div>
           <div className="dev-card-value text-blue">{updatingCount}</div>
           <div className="dev-card-desc">正在寫入韌體</div>
         </div>
-        <div className="dev-card">
+        <div className="card dev-card">
           <div className="dev-card-title">韌體落後</div>
           <div className="dev-card-value text-dark">{outdatedDevices.length}</div>
           <div className="dev-card-desc">回報後會自動更新</div>
@@ -175,37 +172,33 @@ export default function DeviceList() {
       </div>
 
       {outdatedDevices.length > 0 && (
-        <div className="dev-alert-box">
-          <div className="dev-alert-icon">⚠️</div>
-          <div className="dev-alert-content">
-            <div className="dev-alert-title">有裝置的韌體版本落後</div>
-            <div className="dev-alert-desc">
-              {outdatedDevices.length} 台裝置不是最新韌體：{outdatedDevices.map(d => d.id).join('、')}，這些裝置會在下次回報心跳時自動更新，離線的裝置則要重新上線。
-            </div>
-          </div>
+        <div className="alert alert-warning">
+          <span className="alert-title">有裝置的韌體版本落後：</span>
+          {outdatedDevices.length} 台裝置不是最新韌體：{outdatedDevices.map(d => d.id).join('、')}，這些裝置會在下次回報心跳時自動更新，離線的裝置則要重新上線。
         </div>
       )}
 
-      <div className="dev-table-container">
-        <div className="dev-table-toolbar">
-          <div className="dev-search-box">
-            <span className="dev-search-icon">
+      <div className="data-table-container dev-table-container">
+        <div className="data-table-toolbar dev-table-toolbar">
+          <div className="search-box">
+            <span className="search-icon">
               <svg xmlns="http://www.w3.org/2000/svg" height="18px" viewBox="0 -960 960 960" width="18px" fill="currentColor">
                 <path d="M784-120 532-372q-30 24-69 38t-83 14q-109 0-184.5-75.5T120-580q0-109 75.5-184.5T380-840q109 0 184.5 75.5T640-580q0 44-14 83t-38 69l252 252-56 56ZM380-400q75 0 127.5-52.5T560-580q0-75-52.5-127.5T380-760q-75 0-127.5 52.5T200-580q0 75 52.5 127.5T380-400Z" />
               </svg>
             </span>
             <input
               type="text"
+              className="form-input"
               placeholder="搜尋名稱或型號"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />
           </div>
           <div className="dev-table-filters">
-            <div className="dev-filter-group">
-              <span className="dev-filter-label">型號</span>
+            <div className="form-group dev-filter-group">
+              <span className="form-label">型號</span>
               <select
-                className="dev-select"
+                className="form-select"
                 value={selectedModel}
                 onChange={(e) => setSelectedModel(e.target.value)}
               >
@@ -215,19 +208,19 @@ export default function DeviceList() {
                 ))}
               </select>
             </div>
-            <div className="dev-filter-group">
-              <span className="dev-filter-label">狀態</span>
-              <div className="dev-segmented-control">
+            <div className="form-group dev-filter-group">
+              <span className="form-label">狀態</span>
+              <div className="segmented-control">
                 <button
-                  className={selectedStatus === '全部' ? 'active' : ''}
+                  className={`segmented-btn ${selectedStatus === '全部' ? 'active' : ''}`}
                   onClick={() => setSelectedStatus('全部')}
                 >全部</button>
                 <button
-                  className={selectedStatus === '在線' ? 'active' : ''}
+                  className={`segmented-btn ${selectedStatus === '在線' ? 'active' : ''}`}
                   onClick={() => setSelectedStatus('在線')}
                 >在線</button>
                 <button
-                  className={selectedStatus === '離線' ? 'active' : ''}
+                  className={`segmented-btn ${selectedStatus === '離線' ? 'active' : ''}`}
                   onClick={() => setSelectedStatus('離線')}
                 >離線</button>
               </div>
@@ -236,7 +229,7 @@ export default function DeviceList() {
         </div>
 
         <div className="dev-table-wrapper">
-          <table className="dev-table">
+          <table className="data-table">
             <thead>
               <tr>
                 <th>裝置</th>
@@ -265,9 +258,9 @@ export default function DeviceList() {
                   </td>
                   <td className="dev-col-status">
                     {d.status === 'online' ? (
-                      <span className="dev-badge-online">在線</span>
+                      <span className="badge badge-success">在線</span>
                     ) : (
-                      <span className="dev-badge-offline">離線</span>
+                      <span className="badge badge-error">離線</span>
                     )}
                   </td>
                 </tr>

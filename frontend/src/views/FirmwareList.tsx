@@ -99,7 +99,7 @@ export default function FirmwareList({ groupedFirmwares }: {
                       <div className="fw-group-left">
                         <div className="fw-group-title-row">
                           <span className="fw-group-model">{group.model}</span>
-                          <span className="fw-badge fw-group-badge">最新 v{group.latest.version}</span>
+                          <span className="badge badge-success">最新 v{group.latest.version}</span>
                         </div>
                         <div className="fw-group-subtitle">
                           {group.totalDevices} 台裝置 ‧ 上次發佈 {formatTimestamp(group.latest.created_at)}
@@ -137,14 +137,14 @@ export default function FirmwareList({ groupedFirmwares }: {
                                   <div className="fw-delete-confirm">
                                     <span className="fw-delete-warning">刪除後無法復原</span>
                                     <button
-                                      className="fw-confirm-btn"
+                                      className="btn btn-error btn-outline"
                                       onClick={() => handleDeleteConfirm(item.id, group.model, item.version)}
                                       disabled={deleting}
                                     >
                                       確定刪除
                                     </button>
                                     <button
-                                      className="fw-cancel-btn"
+                                      className="btn btn-secondary"
                                       onClick={handleDeleteCancel}
                                       disabled={deleting}
                                     >
@@ -153,7 +153,7 @@ export default function FirmwareList({ groupedFirmwares }: {
                                   </div>
                                 ) : (
                                   <button
-                                    className="fw-delete-btn"
+                                    className="btn btn-outline"
                                     onClick={() => handleDeleteClick(item.id)}
                                   >
                                     刪除

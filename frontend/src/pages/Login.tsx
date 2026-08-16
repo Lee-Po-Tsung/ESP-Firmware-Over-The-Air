@@ -37,7 +37,7 @@ export default function Login() {
         </div>
       </div>
 
-      <div className="login-card">
+      <div className="card login-card">
         <div className="login-header">
           <h1>登入控制台</h1>
           <p>
@@ -46,27 +46,29 @@ export default function Login() {
         </div>
 
         <form className="login-form" onSubmit={handleSubmit}>
-          <label className="login-field">
-            電子郵件
+          <div className="form-group">
+            <label className="form-label">電子郵件</label>
             <input
               type="text"
+              className="form-input"
               value={email}
               onChange={e => setEmail(e.target.value)}
               autoComplete="username"
               required
             />
-          </label>
+          </div>
 
-          <label className="login-field">
-            密碼
+          <div className="form-group">
+            <label className="form-label">密碼</label>
             <input
               type="password"
+              className="form-input"
               value={password}
               onChange={e => setPassword(e.target.value)}
               autoComplete="current-password"
               required
             />
-          </label>
+          </div>
 
           <div className="login-form-actions">
             <label className="login-remember">
@@ -80,9 +82,14 @@ export default function Login() {
             <a href="#" className="login-forgot">忘記密碼？</a>
           </div>
 
-          {error && <p className="login-error">{error}</p>}
+          {error && (
+            <div className="alert alert-error">
+              <span className="alert-title">登入失敗：</span>
+              {error}
+            </div>
+          )}
 
-          <button type="submit" className="login-submit" disabled={submitting}>
+          <button type="submit" className="btn btn-primary" style={{ width: '100%', marginTop: '0.5rem', padding: '0.8rem' }} disabled={submitting}>
             登入
           </button>
         </form>

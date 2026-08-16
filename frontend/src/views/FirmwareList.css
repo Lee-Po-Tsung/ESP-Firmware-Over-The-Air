@@ -80,21 +80,7 @@
   color: #212529;
 }
 
-.fw-badge {
-  display: inline-block;
-  padding: 0.15rem 0.5rem;
-  border-radius: 0.35rem;
-  font-family: var(--mono);
-  font-size: 0.65rem;
-  font-weight: 700;
-  white-space: nowrap;
-}
 
-.fw-group-badge {
-  background: #d8e7c1;
-  color: #405024;
-  border: 0;
-}
 
 .fw-group-right {
   display: flex;
@@ -175,22 +161,7 @@
   color: #888;
 }
 
-.fw-delete-btn {
-  font-family: var(--mono, monospace);
-  font-size: 0.95rem;
-  color: #212529;
-  background: transparent;
-  border: none;
-  border-bottom: 1px solid #212529;
-  padding: 0.2rem 0.5rem;
-  border-radius: 4px;
-  cursor: pointer;
-  transition: background-color 0.2s ease;
-}
 
-.fw-delete-btn:hover {
-  background-color: #f0f0f0;
-}
 
 .fw-delete-confirm {
   display: flex;
@@ -205,30 +176,7 @@
   color: #8b7a67;
 }
 
-.fw-confirm-btn,
-.fw-cancel-btn {
-  font-family: var(--mono, monospace);
-  font-size: 0.95rem;
-  color: #212529;
-  background: transparent;
-  border: none;
-  border-bottom: 1px solid #212529;
-  padding: 0.2rem 0.5rem;
-  border-radius: 4px;
-  cursor: pointer;
-  transition: background-color 0.2s ease;
-}
 
-.fw-confirm-btn:hover,
-.fw-cancel-btn:hover {
-  background-color: #f0f0f0;
-}
-
-.fw-confirm-btn:disabled,
-.fw-cancel-btn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
 
 @media (max-width: 1200px) {
   .page-wrapper {
