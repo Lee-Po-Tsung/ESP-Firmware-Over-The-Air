@@ -291,7 +291,6 @@
   color: #374151;
 }
 
-.dev-col-signal,
 .dev-col-seen {
   font-family: var(--mono, monospace);
   font-size: 0.85rem;

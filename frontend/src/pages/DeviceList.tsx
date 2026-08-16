@@ -33,23 +33,7 @@ function getStatus(iso: string | null): 'online' | 'offline' {
   return seconds <= 60 ? 'online' : 'offline';
 }
 
-function getFakeData(id: string) {
-  let hash = 0;
-  for (let i = 0; i < id.length; i++) {
-    hash = id.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  const ip3 = Math.abs(hash % 255);
-  const ip4 = Math.abs((hash >> 8) % 255);
-  const signal = -50 - Math.abs(hash % 40);
-  const locations = ['台北，一樓大廳', '台北，屋頂', '桃園，機房', '台北，產線', '台北，冷藏室', '台北，戶外'];
-  const loc = locations[Math.abs(hash) % locations.length];
-  
-  return {
-    ip: `10.0.${ip3}.${ip4}`,
-    location: loc,
-    signal_dbm: signal
-  };
-}
+
 
 export default function DeviceList() {
   const { session } = useAuth();
@@ -76,12 +60,12 @@ export default function DeviceList() {
           return r.json();
         })
       ])
-      .then(([devs, fws]) => {
-        setApiDevices(devs);
-        setFirmwares(fws);
-        setError(null);
-      })
-      .catch(e => setError(e instanceof Error ? e.message : String(e)));
+        .then(([devs, fws]) => {
+          setApiDevices(devs);
+          setFirmwares(fws);
+          setError(null);
+        })
+        .catch(e => setError(e instanceof Error ? e.message : String(e)));
     };
 
     fetchData();
@@ -108,16 +92,12 @@ export default function DeviceList() {
   const devices = apiDevices.map(d => {
     const latestFw = latestFirmwares[d.model];
     const is_latest = (latestFw && d.current_version) ? (d.current_version === latestFw.version) : true;
-    const fakeData = getFakeData(d.device_id);
-    
+
     return {
       id: d.device_id,
       model: d.model,
-      ip: fakeData.ip,
-      location: fakeData.location,
       current_version: d.current_version || '未知',
       is_latest,
-      signal_dbm: fakeData.signal_dbm,
       last_seen: timeAgo(d.last_seen),
       status: getStatus(d.last_seen) as 'online' | 'offline' | 'updating'
     };
@@ -127,14 +107,18 @@ export default function DeviceList() {
   const offlineCount = devices.filter(d => d.status === 'offline').length;
   const updatingCount = devices.filter(d => d.status === 'updating').length;
   const outdatedDevices = devices.filter(d => !d.is_latest);
-  const uniqueModels = Array.from(new Set(devices.map(d => d.model)));
+  const uniqueModels = Array.from(new Set([
+    'ESP32-S3-DevKit',
+    'ESP32-S3-Mini',
+    'ESP8266-12F',
+    ...devices.map(d => d.model)
+  ]));
 
   const filteredDevices = devices.filter(d => {
     const searchLower = searchQuery.toLowerCase();
     const matchesSearch = !searchQuery ||
       d.id.toLowerCase().includes(searchLower) ||
-      d.model.toLowerCase().includes(searchLower) ||
-      d.ip.toLowerCase().includes(searchLower);
+      d.model.toLowerCase().includes(searchLower);
 
     const matchesModel = selectedModel === '全部型號' || d.model === selectedModel;
 
@@ -150,7 +134,6 @@ export default function DeviceList() {
       <div className="dev-header-area">
         <div className="dev-header-left">
           <h1>裝置監控</h1>
-          <p>裝置每 15 秒回報一次心跳，超過 60 秒沒有回報就標記為離線。</p>
         </div>
         <div className="dev-live-indicator">
           <span className="live-dot"></span>
@@ -213,7 +196,7 @@ export default function DeviceList() {
             </span>
             <input
               type="text"
-              placeholder="搜尋名稱、型號或 IP"
+              placeholder="搜尋名稱或型號"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />
@@ -258,7 +241,6 @@ export default function DeviceList() {
               <tr>
                 <th>裝置</th>
                 <th>韌體</th>
-                <th>訊號</th>
                 <th>最後回報</th>
                 <th>狀態</th>
               </tr>
@@ -271,15 +253,12 @@ export default function DeviceList() {
                       <span className={`dev-status-dot ${d.status === 'online' ? 'dot-green' : 'dot-red'}`}></span>
                       <div className="dev-device-text">
                         <div className="dev-device-name">{d.id}</div>
-                        <div className="dev-device-meta">{d.model} · {d.ip} · {d.location}</div>
+                        <div className="dev-device-meta">{d.model}</div>
                       </div>
                     </div>
                   </td>
                   <td className="dev-col-fw">
                     <span className="dev-fw-text">{d.current_version}</span>
-                  </td>
-                  <td className="dev-col-signal">
-                    {d.signal_dbm ? `${d.signal_dbm} dBm` : '—'}
                   </td>
                   <td className="dev-col-seen">
                     {d.last_seen}
