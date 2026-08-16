@@ -5,10 +5,33 @@ import DeviceList from './pages/DeviceList';
 import Firmware from './pages/Firmware';
 import Login from './pages/Login';
 import { useAuth } from './auth/context';
+import { useState, useEffect } from 'react';
 
 function SiderBar() {
   const { pathname } = useLocation();
   const { session, logout } = useAuth();
+  const [isCollapsed, setIsCollapsed] = useState(() => window.innerWidth < 960);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia('(max-width: 960px)');
+    const handleMediaChange = (e: MediaQueryListEvent) => {
+      setIsCollapsed(e.matches);
+    };
+    
+    if (mediaQuery.addEventListener) {
+      mediaQuery.addEventListener('change', handleMediaChange);
+    } else {
+      mediaQuery.addListener(handleMediaChange);
+    }
+  
+    return () => {
+      if (mediaQuery.removeEventListener) {
+        mediaQuery.removeEventListener('change', handleMediaChange);
+      } else {
+        mediaQuery.removeListener(handleMediaChange);
+      }
+    };
+  }, []);
 
   if (pathname === '/login') return null;
 
@@ -23,56 +46,69 @@ function SiderBar() {
   }
 
   return (
-    <aside className="sidebar">
-      <div className="sidebar-brand">
-        <div className="sidebar-mark" aria-hidden="true">ESP</div>
-        <div className="sidebar-brand-copy">
-          <span className="sidebar-title">ESPFleet</span>
-          <span className="sidebar-subtitle">Firmware OTA Control Center</span>
-        </div>
-      </div>
+    <>
+      {!isCollapsed && <div className="sidebar-backdrop" onClick={() => setIsCollapsed(true)} />}
+      <aside className={`sidebar ${isCollapsed ? 'is-collapsed' : ''}`}>
+        <div className="sidebar-inner">
+          <div className="sidebar-brand">
+            <div className="sidebar-mark" aria-hidden="true">ESP</div>
+            <div className="sidebar-brand-copy">
+              <span className="sidebar-title">ESPFleet</span>
+              <span className="sidebar-subtitle">Firmware OTA Control Center</span>
+            </div>
+          </div>
 
-      <nav className="sidebar-nav" aria-label="Primary navigation">
-        {navItems.map(item => (
-          <Link
-            key={item.to}
-            to={item.to}
-            className={`sidebar-link${isActivePath(item.to) ? ' is-active' : ''}`}
-          >
-            <span className="sidebar-link-index">{item.index}</span>
-            <span className="sidebar-link-copy">
-              <span className="sidebar-link-label">{item.label}</span>
-              <span className="sidebar-link-hint">{item.hint}</span>
-            </span>
-          </Link>
-        ))}
-      </nav>
+          <nav className="sidebar-nav" aria-label="Primary navigation">
+            {navItems.map(item => (
+              <Link
+                key={item.to}
+                to={item.to}
+                className={`sidebar-link${isActivePath(item.to) ? ' is-active' : ''}`}
+              >
+                <span className="sidebar-link-index">{item.index}</span>
+                <span className="sidebar-link-copy">
+                  <span className="sidebar-link-label">{item.label}</span>
+                  <span className="sidebar-link-hint">{item.hint}</span>
+                </span>
+              </Link>
+            ))}
+          </nav>
 
-      <div className="sidebar-footer">
-        <div className="sidebar-account">
-          {session ? (
-            <>
-              <strong className="sidebar-account-name">{session.username === 'ops' ? 'ops 團隊' : session.username}</strong>
-              <span className="sidebar-account-email">{session.username}@espfleet.io</span>
-            </>
-          ) : (
-            <span className="sidebar-account-name">Guest</span>
-          )}
-        </div>
+          <div className="sidebar-footer">
+            <div className="sidebar-account">
+              {session ? (
+                <>
+                  <strong className="sidebar-account-name">{session.username === 'ops' ? 'ops 團隊' : session.username}</strong>
+                  <span className="sidebar-account-email">{session.username}@espfleet.io</span>
+                </>
+              ) : (
+                <span className="sidebar-account-name">Guest</span>
+              )}
+            </div>
 
-        <div className="sidebar-actions">
-          {session ? (
-            <button type="button" className="sidebar-action sidebar-logout" onClick={logout}>
-              <span>登出</span>
-            </button>
-          ) : (
-            <Link to="/login" className="sidebar-action sidebar-login">
-              Login
-            </Link>
-          )}
+            <div className="sidebar-actions">
+              {session ? (
+                <button type="button" className="sidebar-action sidebar-logout" onClick={logout}>
+                  <span>登出</span>
+                </button>
+              ) : (
+                <Link to="/login" className="sidebar-action sidebar-login">
+                  Login
+                </Link>
+              )}
+            </div>
+          </div>
         </div>
-      </div>
-    </aside>
+        <button 
+          type="button" 
+          className="sidebar-toggle" 
+          onClick={() => setIsCollapsed(!isCollapsed)}
+          title={isCollapsed ? "展開選單" : "收合選單"}
+        >
+          {isCollapsed ? ">" : "<"}
+        </button>
+      </aside>
+    </>
   );
 }
 
