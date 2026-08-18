@@ -133,9 +133,9 @@ export default function DeviceList() {
     <div className="dev-page">
       <div className="dev-header-area">
         <div className="dev-header-left">
-          <h1>裝置監控</h1>
+          <h1 className="text-2xl font-bold text-primary">裝置監控</h1>
         </div>
-        <div className="dev-live-indicator">
+        <div className="dev-live-indicator font-mono text-xs text-secondary">
           <span className="live-dot"></span>
           即時 · {time}
         </div>
@@ -150,24 +150,24 @@ export default function DeviceList() {
 
       <div className="dev-summary-cards">
         <div className="card dev-card">
-          <div className="dev-card-title">在線</div>
-          <div className="dev-card-value text-green">{onlineCount}</div>
-          <div className="dev-card-desc">心跳正常</div>
+          <div className="dev-card-title text-xs text-secondary font-medium">在線</div>
+          <div className="dev-card-value text-3xl font-medium font-mono text-success">{onlineCount}</div>
+          <div className="dev-card-desc text-xs text-tertiary">心跳正常</div>
         </div>
         <div className="card dev-card">
-          <div className="dev-card-title">離線</div>
-          <div className="dev-card-value text-red">{offlineCount}</div>
-          <div className="dev-card-desc">超過 60 秒未回報</div>
+          <div className="dev-card-title text-xs text-secondary font-medium">離線</div>
+          <div className="dev-card-value text-3xl font-medium font-mono text-error">{offlineCount}</div>
+          <div className="dev-card-desc text-xs text-tertiary">超過 60 秒未回報</div>
         </div>
         <div className="card dev-card">
-          <div className="dev-card-title">更新中</div>
-          <div className="dev-card-value text-blue">{updatingCount}</div>
-          <div className="dev-card-desc">正在寫入韌體</div>
+          <div className="dev-card-title text-xs text-secondary font-medium">更新中</div>
+          <div className="dev-card-value text-3xl font-medium font-mono text-info">{updatingCount}</div>
+          <div className="dev-card-desc text-xs text-tertiary">正在寫入韌體</div>
         </div>
         <div className="card dev-card">
-          <div className="dev-card-title">韌體落後</div>
-          <div className="dev-card-value text-dark">{outdatedDevices.length}</div>
-          <div className="dev-card-desc">回報後會自動更新</div>
+          <div className="dev-card-title text-xs text-secondary font-medium">韌體落後</div>
+          <div className="dev-card-value text-3xl font-medium font-mono text-primary">{outdatedDevices.length}</div>
+          <div className="dev-card-desc text-xs text-tertiary">回報後會自動更新</div>
         </div>
       </div>
 
@@ -245,15 +245,15 @@ export default function DeviceList() {
                     <div className="dev-device-info">
                       <span className={`dev-status-dot ${d.status === 'online' ? 'dot-green' : 'dot-red'}`}></span>
                       <div className="dev-device-text">
-                        <div className="dev-device-name">{d.id}</div>
-                        <div className="dev-device-meta">{d.model}</div>
+                        <div className="dev-device-name font-mono text-sm font-semibold text-primary">{d.id}</div>
+                        <div className="dev-device-meta font-mono text-xs text-tertiary">{d.model}</div>
                       </div>
                     </div>
                   </td>
                   <td className="dev-col-fw">
-                    <span className="dev-fw-text">{d.current_version}</span>
+                    <span className="dev-fw-text font-mono text-sm text-primary">{d.current_version}</span>
                   </td>
-                  <td className="dev-col-seen">
+                  <td className="dev-col-seen font-mono text-sm text-secondary">
                     {d.last_seen}
                   </td>
                   <td className="dev-col-status">

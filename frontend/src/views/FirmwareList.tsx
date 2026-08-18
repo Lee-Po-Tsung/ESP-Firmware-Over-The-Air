@@ -88,7 +88,7 @@ export default function FirmwareList({ groupedFirmwares }: {
         <div className="main-card-body">
           <div className="firmware-stack">
             {groupedFirmwares.length === 0 ? (
-              <div className="fw-empty-state">目前沒有韌體版本。</div>
+              <div className="fw-empty-state text-sm text-secondary">目前沒有韌體版本。</div>
             ) : (
               groupedFirmwares.map((group) => {
                 const isExpanded = expandedGroups.has(group.model);
@@ -98,15 +98,15 @@ export default function FirmwareList({ groupedFirmwares }: {
                     <div className="fw-group-header">
                       <div className="fw-group-left">
                         <div className="fw-group-title-row">
-                          <span className="fw-group-model">{group.model}</span>
+                          <span className="fw-group-model font-mono text-lg text-primary">{group.model}</span>
                           <span className="badge badge-success">最新 v{group.latest.version}</span>
                         </div>
-                        <div className="fw-group-subtitle">
+                        <div className="fw-group-subtitle font-mono text-xs text-secondary">
                           {group.totalDevices} 台裝置 ‧ 上次發佈 {formatTimestamp(group.latest.created_at)}
                         </div>
                       </div>
                       <div className="fw-group-right">
-                        <span className="fw-group-toggle-text" onClick={() => toggleGroup(group.model)}>
+                        <span className="fw-group-toggle-text font-mono text-base text-primary" onClick={() => toggleGroup(group.model)}>
                           {isExpanded ? '收合歷史' : '展開歷史'} ({group.count})
                         </span>
                       </div>
@@ -121,21 +121,21 @@ export default function FirmwareList({ groupedFirmwares }: {
 
                           return (
                             <div key={item.id} className="fw-history-row">
-                              <div className="fw-history-version">v{item.version}</div>
+                              <div className="fw-history-version font-mono text-sm text-primary">v{item.version}</div>
                               <div className="fw-history-file">
-                                <div className="fw-file-name">{item.filename}</div>
-                                <div className="fw-file-meta">
+                                <div className="fw-file-name font-mono text-xs text-primary">{item.filename}</div>
+                                <div className="fw-file-meta font-mono text-xs text-tertiary">
                                   {item.size ? formatSize(item.size) + ' ‧ ' : ''}{formatTimestamp(item.created_at)}
                                 </div>
                               </div>
                               <div className="fw-history-right">
                                 {isLatest ? (
-                                  <div className="fw-history-status">目前最新版，無法刪除</div>
+                                  <div className="fw-history-status font-mono text-xs text-tertiary">目前最新版，無法刪除</div>
                                 ) : deviceCount > 0 ? (
-                                  <div className="fw-history-status">{deviceCount} 台裝置在用，無法刪除</div>
+                                  <div className="fw-history-status font-mono text-xs text-tertiary">{deviceCount} 台裝置在用，無法刪除</div>
                                 ) : isDeleting ? (
                                   <div className="fw-delete-confirm">
-                                    <span className="fw-delete-warning">刪除後無法復原</span>
+                                    <span className="fw-delete-warning font-mono text-xs text-tertiary">刪除後無法復原</span>
                                     <button
                                       className="btn btn-error btn-outline"
                                       onClick={() => handleDeleteConfirm(item.id, group.model, item.version)}

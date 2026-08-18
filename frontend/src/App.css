@@ -1,10 +1,3 @@
-.app-shell {
-  height: 100svh;
-  min-height: 100svh;
-  display: grid;
-  grid-template-columns: 254px minmax(0, 1fr);
-  background: #ffffff;
-}
 
 .content-shell {
   width: 100%;
@@ -35,8 +28,8 @@
   flex-shrink: 0;
   height: 100svh;
   box-sizing: border-box;
-  background: #ffffff;
-  border-right: 1px solid #e5dfd6;
+  background: var(--bg-surface);
+  border-right: 1px solid var(--border-light);
   transition: transform 0.3s ease;
   z-index: 100;
 }
@@ -71,11 +64,7 @@
   display: grid;
   place-items: center;
   border-radius: 0.55rem;
-  background: #1f1b16;
-  color: #f7f1e8;
-  font-family: var(--mono);
-  font-size: 0.62rem;
-  font-weight: 700;
+  background: var(--color-primary);
   letter-spacing: 0.05em;
 }
 
@@ -88,10 +77,6 @@
 }
 
 .sidebar-title {
-  color: #0f172a;
-  font-family: var(--mono);
-  font-size: 1rem;
-  font-weight: 500;
   letter-spacing: 0;
 }
 
@@ -112,7 +97,7 @@
   padding: 0.9rem 0.85rem;
   border-radius: 0.7rem;
   text-decoration: none;
-  color: #1f2937;
+  color: var(--text-primary);
   border: 1px solid transparent;
   background: transparent;
   transition:
@@ -123,23 +108,19 @@
 }
 
 .sidebar-link:hover {
-  background: #f4efe6;
-  border-color: #f4efe6;
+  background: var(--bg-surface-hover);
+  border-color: var(--bg-surface-hover);
   transform: translateX(1px);
 }
 
 .sidebar-link.is-active {
-  background: #e9e2d9;
-  border-color: #e9e2d9;
-  color: #111111;
+  background: var(--bg-subtle);
+  border-color: var(--bg-subtle);
+  color: var(--text-primary);
 }
 
 .sidebar-link-index {
   min-width: 1.4rem;
-  color: #111827;
-  font-family: var(--mono);
-  font-size: 0.68rem;
-  font-weight: 500;
   letter-spacing: 0;
 }
 
@@ -152,9 +133,6 @@
 }
 
 .sidebar-link-label {
-  font-family: var(--mono);
-  font-size: 0.88rem;
-  font-weight: 500;
   line-height: 1.2;
 }
 
@@ -165,7 +143,7 @@
 .sidebar-footer {
   margin-top: auto;
   padding-top: 1rem;
-  border-top: 1px solid #e5dfd6;
+  border-top: 1px solid var(--border-light);
   display: flex;
   flex-direction: column;
   gap: 1rem;
@@ -178,26 +156,6 @@
   text-align: left;
 }
 
-.sidebar-account-label {
-  display: none;
-}
-
-.sidebar-account-name {
-  color: #212529;
-  font-family: var(--mono, monospace);
-  font-size: 0.85rem;
-  font-weight: 500;
-}
-
-.sidebar-account-email {
-  color: #888;
-  font-family: var(--mono, monospace);
-  font-size: 0.75rem;
-}
-
-.sidebar-account-role {
-  display: none;
-}
 
 .sidebar-actions {
   display: grid;
@@ -213,20 +171,16 @@
   margin-left: -0.5rem;
   background: transparent;
   border: none;
-  border-bottom: 1px solid #212529;
+  border-bottom: 1px solid var(--text-primary);
   border-radius: 4px;
   text-decoration: none;
   line-height: 1.2;
-  color: #212529;
-  font-family: var(--mono, monospace);
-  font-size: 1.1rem;
-  font-weight: 500;
   cursor: pointer;
   transition: background-color 0.2s ease;
 }
 
 .sidebar-action:hover {
-  background-color: #f0f0f0;
+  background-color: var(--border-light);
 }
 
 .sidebar-login,
@@ -234,19 +188,8 @@
   /* Inherits from .sidebar-action */
 }
 
-.app-main {
-  min-width: 0;
-  padding: 1.5rem;
-}
-
-.app-main > * {
-  min-width: 0;
-}
 
 @media (max-width: 960px) {
-  .app-shell {
-    grid-template-columns: 1fr;
-  }
 
   .sidebar {
     position: fixed;
@@ -285,14 +228,14 @@
     width: 24px;
     height: 60px;
     background: rgba(0, 0, 0, 0.15);
-    color: #333;
+    color: var(--text-primary);
     border: 1px solid rgba(0,0,0,0.1);
     border-left: none;
     border-radius: 0 8px 8px 0;
     cursor: pointer;
     align-items: center;
     justify-content: center;
-    font-family: var(--mono);
+    font-family: var(--font-mono);
     font-size: 16px;
     font-weight: bold;
     z-index: 10;
@@ -303,16 +246,12 @@
 
   .sidebar-toggle:hover {
     background: rgba(0, 0, 0, 0.3);
-    color: #fff;
+    color: var(--bg-surface);
   }
 
   .sidebar.is-collapsed .sidebar-toggle {
     background: rgba(0, 0, 0, 0.4);
-    color: #fff;
-  }
-
-  .app-main {
-    padding-top: 1rem;
+    color: var(--bg-surface);
   }
 }
 
@@ -320,9 +259,5 @@
 
   .sidebar-link {
     padding-inline: 0.8rem;
-  }
-
-  .app-main {
-    padding: 0.9rem;
   }
 }

@@ -64,14 +64,14 @@ export default function Firmware() {
         <div className="firmware-page">
             <div className="main-card-header firmware-dashboard-header">
                 <div className="header-titles">
-                    <h1>韌體管理</h1>
-                    <p>上傳新版韌體並追蹤每個型號的版本歷史，裝置會在下次開機時自動更新。</p>
+                    <h1 className="text-xl font-bold text-primary">韌體管理</h1>
+                    <p className="text-xs text-secondary">上傳新版韌體並追蹤每個型號的版本歷史，裝置會在下次開機時自動更新。</p>
                 </div>
 
                 <div className="firmware-summary">
-                    <span className="firmware-summary-item">{groupedFirmwares.length} 個型號</span>
-                    <span className="firmware-summary-item">{firmwares.length} 個版本</span>
-                    <span className="firmware-summary-item">0 台裝置</span>
+                    <span className="firmware-summary-item font-mono text-xs text-primary">{groupedFirmwares.length} 個型號</span>
+                    <span className="firmware-summary-item font-mono text-xs text-primary">{firmwares.length} 個版本</span>
+                    <span className="firmware-summary-item font-mono text-xs text-primary">0 台裝置</span>
                 </div>
             </div>
             <div className="firmware-manage-card">

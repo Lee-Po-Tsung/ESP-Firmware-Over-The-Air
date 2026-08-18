@@ -3,11 +3,11 @@
   --bg-body: #f6f0e8;
   --bg-surface: #ffffff;
   --bg-subtle: #f3f4f6;
-  --bg-surface-hover: #faf9f8;
+  --bg-surface-hover: #f4efe6;
   
   /* Colors - Text */
-  --text-primary: #111827;
-  --text-secondary: #6b7280;
+  --text-primary: #171717;
+  --text-secondary: #555555;
   --text-tertiary: #9ca3af;
   --text-inverse: #ffffff;
   
@@ -17,11 +17,11 @@
   --border-focus: #1f1b16;
 
   /* Colors - Status / Accents */
-  --color-success: #10b981;
+  --color-success: #16a34a;
   --bg-success: #dcfce7;
   --text-success: #166534;
   
-  --color-error: #ef4444;
+  --color-error: #dc2626;
   --bg-error: #fee2e2;
   --text-error: #991b1b;
   
@@ -397,3 +397,36 @@ p {
   gap: var(--space-sm);
   pointer-events: none;
 }
+
+/* =========================================
+   UTILITIES
+   ========================================= */
+
+/* Typography - Families */
+.font-sans { font-family: var(--font-sans); }
+.font-mono { font-family: var(--font-mono); }
+
+/* Typography - Sizes */
+.text-xs { font-size: 0.75rem; line-height: 1rem; }
+.text-sm { font-size: 0.85rem; line-height: 1.25rem; }
+.text-base { font-size: 1rem; line-height: 1.5rem; }
+.text-lg { font-size: 1.1rem; line-height: 1.75rem; }
+.text-xl { font-size: 1.45rem; line-height: 1.75rem; }
+.text-2xl { font-size: 1.7rem; line-height: 2rem; }
+.text-3xl { font-size: 2.2rem; line-height: 2.25rem; }
+
+/* Typography - Weights */
+.font-normal { font-weight: 400; }
+.font-medium { font-weight: 500; }
+.font-semibold { font-weight: 600; }
+.font-bold { font-weight: 700; }
+
+/* Typography - Colors */
+.text-primary { color: var(--text-primary); }
+.text-secondary { color: var(--text-secondary); }
+.text-tertiary { color: var(--text-tertiary); }
+.text-success { color: var(--text-success); }
+.text-error { color: var(--text-error); }
+.text-warning { color: var(--text-warning); }
+.text-info { color: var(--text-info); }
+.text-inverse { color: var(--text-inverse); }

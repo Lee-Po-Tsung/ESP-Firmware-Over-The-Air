@@ -30,17 +30,17 @@ export default function Login() {
   return (
     <div className="login-page">
       <div className="login-brand">
-        <div className="login-logo">ESP</div>
+        <div className="login-logo font-mono text-xs font-bold text-inverse">ESP</div>
         <div className="login-brand-text">
-          <div className="login-brand-title">ESPFleet</div>
-          <div className="login-brand-subtitle">韌體發佈與裝置監控</div>
+          <div className="login-brand-title text-2xl font-bold text-primary font-mono">ESPFleet</div>
+          <div className="login-brand-subtitle text-sm text-secondary font-mono">韌體發佈與裝置監控</div>
         </div>
       </div>
 
       <div className="card login-card">
         <div className="login-header">
-          <h1>登入控制台</h1>
-          <p>
+          <h1 className="text-xl font-bold text-primary">登入控制台</h1>
+          <p className="text-sm text-secondary">
             用你的工作帳號登入，即可管理韌體版本並查看所有裝置的即時狀態。
           </p>
         </div>
@@ -71,7 +71,7 @@ export default function Login() {
           </div>
 
           <div className="login-form-actions">
-            <label className="login-remember">
+            <label className="login-remember text-sm text-primary">
               <input
                 type="checkbox"
                 checked={remember}
@@ -79,7 +79,7 @@ export default function Login() {
               />
               記住這台電腦
             </label>
-            <a href="#" className="login-forgot">忘記密碼？</a>
+            <a href="#" className="login-forgot text-sm text-secondary">忘記密碼？</a>
           </div>
 
           {error && (
@@ -95,7 +95,7 @@ export default function Login() {
         </form>
       </div>
 
-      <p className="login-footer">
+      <p className="login-footer text-xs text-secondary">
         還沒有帳號？請聯絡你的組織管理員。
       </p>
     </div>

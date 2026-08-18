@@ -62,8 +62,8 @@ export default function FirmwareUpload() {
     <div className="upload-container">
       <div className="card upload-card">
         <div className="upload-header">
-          <h1>上傳新韌體</h1>
-          <p>只接受 .bin 檔案；上傳後會自動簽署與發佈。</p>
+          <h1 className="text-xl font-bold text-primary">上傳新韌體</h1>
+          <p className="text-xs text-secondary">只接受 .bin 檔案；上傳後會自動簽署與發佈。</p>
         </div>
         <form ref={formRef} onSubmit={handleSubmit}>
           <div className="form-group">

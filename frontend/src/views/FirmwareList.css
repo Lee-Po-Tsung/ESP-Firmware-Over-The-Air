@@ -5,8 +5,8 @@
   min-width: 0;
   height: 100%;
   padding: 1.35rem 1.1rem 1.15rem 0.75rem;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  color: #212529;
+  font-family: var(--font-sans);
+  color: var(--text-primary);
   overflow-y: auto;
 }
 
@@ -33,15 +33,13 @@
   padding: 1.5rem;
   border: 1px dashed #d6cec3;
   border-radius: 0.75rem;
-  background: #fff;
-  color: #6b7280;
-  font-size: 0.9rem;
+  background: var(--bg-surface);
 }
 
 .fw-group-card {
-  border: 1px solid #e0d7cb;
+  border: 1px solid var(--border-light);
   border-radius: 0.85rem;
-  background: #ffffff;
+  background: var(--bg-surface);
   box-shadow: 0 8px 18px rgba(17, 24, 39, 0.035);
   overflow: hidden;
 }
@@ -52,8 +50,8 @@
   align-items: center;
   gap: 1rem;
   padding: 1.2rem 1.5rem;
-  border-bottom: 1px solid #f0f0f0;
-  background: #ffffff;
+  border-bottom: 1px solid var(--border-light);
+  background: var(--bg-surface);
 }
 
 .fw-group-left {
@@ -68,30 +66,13 @@
   gap: 0.8rem;
 }
 
-.fw-group-subtitle {
-  font-family: var(--mono, monospace);
-  font-size: 0.75rem;
-  color: #6b7280;
-}
-
-.fw-group-model {
-  font-family: var(--mono, monospace);
-  font-size: 1.1rem;
-  color: #212529;
-}
-
-
-
 .fw-group-right {
   display: flex;
   align-items: center;
 }
 
 .fw-group-toggle-text {
-  font-family: var(--mono, monospace);
-  font-size: 1rem;
-  color: #212529;
-  border-bottom: 1px solid #212529;
+  border-bottom: 1px solid var(--text-primary);
   padding: 0.2rem 0.4rem;
   border-radius: 4px;
   cursor: pointer;
@@ -100,7 +81,7 @@
 }
 
 .fw-group-toggle-text:hover {
-  background-color: #f0f0f0;
+  background-color: var(--border-light);
 }
 
 .fw-history-list {
@@ -114,17 +95,11 @@
   gap: 1rem;
   align-items: center;
   padding: 1rem 1.5rem;
-  border-top: 1px solid #f0f0f0;
+  border-top: 1px solid var(--border-light);
 }
 
 .fw-history-row:first-child {
   border-top: 0;
-}
-
-.fw-history-version {
-  font-family: var(--mono, monospace);
-  font-size: 0.95rem;
-  color: #212529;
 }
 
 .fw-history-file {
@@ -135,16 +110,7 @@
 }
 
 .fw-file-name {
-  font-family: var(--mono);
-  font-size: 0.72rem;
-  color: #5f5b56;
   word-break: break-all;
-}
-
-.fw-file-meta {
-  font-family: var(--mono);
-  font-size: 0.65rem;
-  color: #91897f;
 }
 
 .fw-history-right {
@@ -155,28 +121,12 @@
   text-align: right;
 }
 
-.fw-history-status {
-  font-family: var(--mono, monospace);
-  font-size: 0.75rem;
-  color: #888;
-}
-
-
-
 .fw-delete-confirm {
   display: flex;
   align-items: center;
   gap: 1rem;
   justify-content: flex-end;
 }
-
-.fw-delete-warning {
-  font-family: var(--mono, monospace);
-  font-size: 0.75rem;
-  color: #8b7a67;
-}
-
-
 
 @media (max-width: 1200px) {
   .page-wrapper {
@@ -193,11 +143,6 @@
     gap: 0.5rem;
   }
 
-  .fw-group-stats {
-    width: 100%;
-    justify-content: flex-start;
-  }
-
   .fw-history-row {
     grid-template-columns: 60px 1fr 150px;
     gap: 0.75rem;
@@ -208,11 +153,6 @@
   .fw-group-header {
     flex-direction: column;
     align-items: flex-start;
-  }
-
-  .fw-group-stats {
-    width: 100%;
-    justify-content: flex-start;
   }
 
   .fw-history-row {

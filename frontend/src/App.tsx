@@ -51,9 +51,9 @@ function SiderBar() {
       <aside className={`sidebar ${isCollapsed ? 'is-collapsed' : ''}`}>
         <div className="sidebar-inner">
           <div className="sidebar-brand">
-            <div className="sidebar-mark" aria-hidden="true">ESP</div>
+            <div className="sidebar-mark font-mono text-xs font-bold text-inverse" aria-hidden="true">ESP</div>
             <div className="sidebar-brand-copy">
-              <span className="sidebar-title">ESPFleet</span>
+              <span className="sidebar-title text-base font-medium text-primary font-mono">ESPFleet</span>
               <span className="sidebar-subtitle">Firmware OTA Control Center</span>
             </div>
           </div>
@@ -65,9 +65,9 @@ function SiderBar() {
                 to={item.to}
                 className={`sidebar-link${isActivePath(item.to) ? ' is-active' : ''}`}
               >
-                <span className="sidebar-link-index">{item.index}</span>
+                <span className="sidebar-link-index text-xs font-medium text-primary font-mono">{item.index}</span>
                 <span className="sidebar-link-copy">
-                  <span className="sidebar-link-label">{item.label}</span>
+                  <span className="sidebar-link-label text-sm font-medium font-mono">{item.label}</span>
                   <span className="sidebar-link-hint">{item.hint}</span>
                 </span>
               </Link>
@@ -78,21 +78,21 @@ function SiderBar() {
             <div className="sidebar-account">
               {session ? (
                 <>
-                  <strong className="sidebar-account-name">{session.username === 'ops' ? 'ops 團隊' : session.username}</strong>
-                  <span className="sidebar-account-email">{session.username}@espfleet.io</span>
+                  <strong className="sidebar-account-name text-sm font-medium text-primary font-mono">{session.username === 'ops' ? 'ops 團隊' : session.username}</strong>
+                  <span className="sidebar-account-email text-xs text-tertiary font-mono">{session.username}@espfleet.io</span>
                 </>
               ) : (
-                <span className="sidebar-account-name">Guest</span>
+                <span className="sidebar-account-name text-sm font-medium text-primary font-mono">Guest</span>
               )}
             </div>
 
             <div className="sidebar-actions">
               {session ? (
-                <button type="button" className="sidebar-action sidebar-logout" onClick={logout}>
+                <button type="button" className="sidebar-action sidebar-logout text-lg font-medium text-primary font-mono" onClick={logout}>
                   <span>登出</span>
                 </button>
               ) : (
-                <Link to="/login" className="sidebar-action sidebar-login">
+                <Link to="/login" className="sidebar-action sidebar-login text-lg font-medium text-primary font-mono">
                   Login
                 </Link>
               )}

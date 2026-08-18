@@ -16,16 +16,11 @@
 }
 
 .header-titles h1 {
-  font-size: 1.45rem;
-  font-weight: 700;
-  color: var(--text-primary);
   margin: 0 0 0.25rem 0;
   letter-spacing: -0.03em;
 }
 
 .header-titles p {
-  color: var(--text-secondary);
-  font-size: 0.72rem;
   margin: 0;
   max-width: 36rem;
 }
@@ -43,9 +38,6 @@
 }
 
 .firmware-summary-item {
-  color: var(--text-primary);
-  font-family: var(--font-mono);
-  font-size: 0.74rem;
   letter-spacing: 0;
 }
 
