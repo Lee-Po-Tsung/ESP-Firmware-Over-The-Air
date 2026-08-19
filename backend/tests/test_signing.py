@@ -7,12 +7,14 @@ from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding, rsa
 from domain.signing import (
+    InvalidManifestField,
     build_manifest,
     calculate_sha256,
     calculate_sha256_bytes,
     compare_version,
     parse_version,
     sign_manifest,
+    validate_manifest_fields,
 )
 
 
@@ -121,3 +123,46 @@ def test_compare_version_tolerates_malformed_without_raising():
     # A bad record must never crash an update check; it just compares as 0s.
     assert compare_version("1.0.1", "1.0.x") is True
     assert compare_version("garbage", "1.0.0") is False
+
+
+@pytest.mark.parametrize("version", ["0.0.0", "1.2.3", "10.20.30", "2026.8.10"])
+def test_validate_manifest_fields_accepts_three_numeric_segments(version):
+    validate_manifest_fields("ESP32-S3-DevKit", version)
+
+
+@pytest.mark.parametrize(
+    "version",
+    [
+        "v2.0.0",
+        "2.0.0-rc1",
+        "1.2",
+        "1.2.3.4",
+        "1.2.x",
+        "",
+        " 1.2.3",
+        "1.2.3 ",
+        # Unicode decimal digits: `int()` reads these as 1.0.0 while the
+        # device's `String::toInt()` on the same bytes reads 0.0.0.
+        "１.０.０",
+    ],
+)
+def test_validate_manifest_fields_rejects_anything_else(version):
+    # Every one of these parses to a tuple the uploader did not intend, and the
+    # parser is required to stay lenient, so this is the only place to say no.
+    with pytest.raises(InvalidManifestField):
+        validate_manifest_fields("ESP32", version)
+
+
+@pytest.mark.parametrize("model", ["", "  ", " ESP32", "ESP32 ", "ESP32|9.9.9", "ESP\n32"])
+def test_validate_manifest_fields_rejects_unusable_models(model):
+    with pytest.raises(InvalidManifestField):
+        validate_manifest_fields(model, "1.0.0")
+
+
+def test_a_model_carrying_the_separator_would_move_the_field_boundary():
+    # Not an attack (upload is admin-gated and the device supplies its own
+    # model), but the manifest has no escaping, so the split has to be
+    # unambiguous by construction.
+    assert build_manifest("ESP32|9.9.9", "1.0.0", "ab") == build_manifest(
+        "ESP32", "9.9.9|1.0.0", "ab"
+    )

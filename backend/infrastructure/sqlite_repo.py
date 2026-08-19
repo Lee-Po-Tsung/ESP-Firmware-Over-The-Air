@@ -6,6 +6,8 @@ each table row to and from the domain dataclasses.
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 from domain.models import Device, Firmware, Role, User
 from domain.signing import parse_version
 from ports.repository import (
@@ -22,15 +24,31 @@ from sqlalchemy.orm import Session
 from infrastructure.db import DeviceRow, FirmwareRow, UserRow
 
 
+def _utc(value: datetime | None) -> datetime | None:
+    """Re-attach the UTC offset SQLite drops.
+
+    Every timestamp is written as UTC (`db._utcnow`), but SQLite has no
+    timezone type and hands the value back naive. Anything serializing a naive
+    datetime produces an ISO string with no offset, which a browser reads as
+    local time. Stamping here is what keeps that from being each caller's
+    problem to remember.
+    """
+    return value.replace(tzinfo=timezone.utc) if value is not None else None
+
+
 def _to_firmware(row: FirmwareRow) -> Firmware:
     return Firmware(
         id=row.id,
         model=row.model,
         version=row.version,
         filename=row.filename,
+        original_filename=row.original_filename,
         signature=row.signature,
         sha256=row.sha256,
-        created_at=row.created_at,
+        size_bytes=row.size_bytes,
+        notes=row.notes,
+        active=row.active,
+        created_at=_utc(row.created_at),
     )
 
 
@@ -40,7 +58,10 @@ def _to_device(row: DeviceRow) -> Device:
         device_id=row.device_id,
         model=row.model,
         current_version=row.current_version,
-        last_seen=row.last_seen,
+        last_seen=_utc(row.last_seen),
+        poll_interval_seconds=row.poll_interval_seconds,
+        rssi=row.rssi,
+        ip=row.ip,
     )
 
 
@@ -50,7 +71,7 @@ def _to_user(row: UserRow) -> User:
         username=row.username,
         password_hash=row.password_hash,
         role=Role(row.role),
-        created_at=row.created_at,
+        created_at=_utc(row.created_at),
     )
 
 
@@ -91,8 +112,11 @@ class SqliteFirmwareRepository(FirmwareRepository):
             model=firmware.model,
             version=firmware.version,
             filename=firmware.filename,
+            original_filename=firmware.original_filename,
             signature=firmware.signature,
             sha256=firmware.sha256,
+            size_bytes=firmware.size_bytes,
+            notes=firmware.notes,
         )
         self._session.add(row)
         try:
@@ -114,11 +138,24 @@ class SqliteFirmwareRepository(FirmwareRepository):
         return _to_firmware(row) if row else None
 
     def get_latest_for_model(self, model: str) -> Firmware | None:
-        rows = self._session.scalars(select(FirmwareRow).where(FirmwareRow.model == model)).all()
+        rows = self._session.scalars(
+            select(FirmwareRow).where(FirmwareRow.model == model, FirmwareRow.active)
+        ).all()
         if not rows:
             return None
         latest = max(rows, key=lambda r: (parse_version(r.version), r.id))
         return _to_firmware(latest)
+
+    def deactivate(self, firmware_id: int) -> Firmware | None:
+        row = self._session.get(FirmwareRow, firmware_id)
+        if row is None:
+            return None
+        # Set unconditionally rather than branching on the current value, so a
+        # second call still succeeds with the row unchanged.
+        row.active = False
+        self._session.commit()
+        self._session.refresh(row)
+        return _to_firmware(row)
 
     def list_all(self) -> list[Firmware]:
         rows = self._session.scalars(
@@ -143,7 +180,32 @@ class SqliteDeviceRepository(DeviceRepository):
         row.model = device.model
         row.current_version = device.current_version
         row.last_seen = device.last_seen
-        self._session.commit()
+        row.poll_interval_seconds = device.poll_interval_seconds
+        row.rssi = device.rssi
+        row.ip = device.ip
+        try:
+            self._session.commit()
+        except IntegrityError as exc:
+            # This is a read followed by a write, and `device_id` is unique, so
+            # a second check-in for the same device landing between the two
+            # makes one of them lose. Handlers are `def`, so uvicorn runs them
+            # on a threadpool and a device retrying mid-flight is enough.
+            #
+            # The other two write methods here answer their own version of this
+            # by raising a domain exception, but neither of them is on the
+            # device's path: `main.ino` reboots over a failed check. The winner
+            # is the same device reporting moments earlier, so its row is
+            # returned as it stands and this check-in is dropped. Rollback
+            # expunges the row built above, which is why this reads again
+            # instead of refreshing.
+            self._session.rollback()
+            winner = self._session.scalar(
+                select(DeviceRow).where(DeviceRow.device_id == device.device_id)
+            )
+            if winner is None:
+                raise exc
+            return _to_device(winner)
+
         self._session.refresh(row)
         return _to_device(row)
 

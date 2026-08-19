@@ -17,7 +17,7 @@ class LocalStorage(StorageBackend):
         self._base_dir.mkdir(parents=True, exist_ok=True)
 
     def _path(self, filename: str) -> Path:
-        # Guard against path traversal — store flat, by basename only.
+        # Guard against path traversal: store flat, by basename only.
         safe = Path(filename).name
         return self._base_dir / safe
 

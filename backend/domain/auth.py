@@ -19,6 +19,27 @@ JWT_ALGORITHM = "HS256"
 # bcrypt refuses passwords over 72 bytes (raises since bcrypt 5.x). Input
 # boundaries validate against this instead of surfacing a 500.
 MAX_PASSWORD_BYTES = 72
+MIN_PASSWORD_LENGTH = 8
+
+
+class InvalidCredentialFormat(ValueError):
+    """A username or password that must not be turned into an account."""
+
+
+def validate_credentials(username: str, password: str) -> None:
+    """Reject credentials no account may be created from.
+
+    Accounts arrive through two doors, `POST /api/auth/register` and
+    `scripts/create_user.py`, and the script is the one that creates admins.
+    Stating the rules once is what keeps the door with the most privilege from
+    being the more permissive of the two.
+    """
+    if not username:
+        raise InvalidCredentialFormat("username must not be empty")
+    if len(password) < MIN_PASSWORD_LENGTH:
+        raise InvalidCredentialFormat(f"password must be at least {MIN_PASSWORD_LENGTH} characters")
+    if len(password.encode("utf-8")) > MAX_PASSWORD_BYTES:
+        raise InvalidCredentialFormat(f"password must be at most {MAX_PASSWORD_BYTES} bytes")
 
 
 def hash_password(plaintext: str) -> str:

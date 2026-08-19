@@ -55,3 +55,19 @@ def test_decode_rejects_expired_token():
 def test_decode_rejects_garbage():
     with pytest.raises(auth.InvalidToken):
         auth.decode_access_token("not-a-jwt", SECRET)
+
+
+@pytest.mark.parametrize(
+    ("username", "password"),
+    [("", "long-enough"), ("bob", "short"), ("bob", "x" * 73)],
+    ids=["empty-username", "short-password", "over-bcrypt-limit"],
+)
+def test_validate_credentials_rejects(username, password):
+    # The empty username is the one `scripts/create_user.py` used to let
+    # through, which mattered because the script is how admins are made.
+    with pytest.raises(auth.InvalidCredentialFormat):
+        auth.validate_credentials(username, password)
+
+
+def test_validate_credentials_accepts_a_usable_pair():
+    auth.validate_credentials("bob", "long-enough")

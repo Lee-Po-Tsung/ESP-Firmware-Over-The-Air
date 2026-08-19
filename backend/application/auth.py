@@ -26,6 +26,7 @@ class RegisterUser:
         self._repo = repository
 
     def execute(self, req: RegisterUserRequest) -> User:
+        auth.validate_credentials(req.username, req.password)
         user = User(
             username=req.username,
             password_hash=auth.hash_password(req.password),

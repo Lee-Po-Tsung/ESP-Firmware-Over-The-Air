@@ -1,7 +1,8 @@
 """Handle an admin uploading a new firmware build.
 
-Stores the uploaded file, computes its SHA-256, signs the `model|version|sha256`
-manifest with the private key, and saves a firmware record pointing at the file.
+Computes the uploaded file's SHA-256, signs the `model|version|sha256` manifest
+with the private key, stores the bytes under a name derived from that hash, and
+saves a firmware record pointing at them.
 """
 
 from __future__ import annotations
@@ -11,11 +12,7 @@ from dataclasses import dataclass
 from domain import signing
 from domain.firmware_image import validate_image
 from domain.models import Firmware
-from ports.repository import (
-    FirmwareAlreadyExists,
-    FirmwareBinaryAlreadyExists,
-    FirmwareRepository,
-)
+from ports.repository import FirmwareBinaryAlreadyExists, FirmwareRepository
 from ports.storage import StorageBackend
 
 
@@ -25,7 +22,7 @@ class UploadFirmwareRequest:
     version: str
     original_filename: str
     data: bytes
-    timestamp: str  # caller-supplied "%y%m%d_%H%M%S" prefix (kept for filename parity)
+    notes: str | None = None
 
 
 class UploadFirmware:
@@ -40,6 +37,7 @@ class UploadFirmware:
         self._private_key_pem = private_key_pem
 
     def execute(self, req: UploadFirmwareRequest) -> Firmware:
+        signing.validate_manifest_fields(req.model, req.version)
         validate_image(req.data)
 
         sha256_hex = signing.calculate_sha256_bytes(req.data)
@@ -50,22 +48,30 @@ class UploadFirmware:
             # one and reflashing on every check.
             raise FirmwareBinaryAlreadyExists(req.model, duplicate.version)
 
-        filename = f"{req.timestamp}_{req.original_filename}"
-        self._storage.put(filename, req.data)
-
+        # Sign before storing: a signing failure then leaves nothing on disk.
         signature = signing.sign_manifest(req.model, req.version, sha256_hex, self._private_key_pem)
 
-        firmware = Firmware(
-            model=req.model,
-            version=req.version,
-            filename=filename,
-            signature=signature,
-            sha256=sha256_hex,
+        # Named after its contents, so a collision implies identical bytes and
+        # the overwrite in `put` is harmless by construction.
+        filename = f"{sha256_hex}.bin"
+        self._storage.put(filename, req.data)
+
+        # A rejected `add` leaves the blob in place: it is shared by every row
+        # with these bytes and nothing here can prove it unreferenced. The two
+        # failures are not symmetric. An orphan blob wastes disk, while a row
+        # whose blob was deleted under it 404s and reboot-loops every device
+        # mid-download.
+        return self._repo.add(
+            Firmware(
+                model=req.model,
+                version=req.version,
+                filename=filename,
+                original_filename=req.original_filename,
+                signature=signature,
+                sha256=sha256_hex,
+                size_bytes=len(req.data),
+                # Absent and blank collapse to null, so the dashboard has one
+                # empty case to render rather than two that look the same.
+                notes=(req.notes or "").strip() or None,
+            )
         )
-        try:
-            return self._repo.add(firmware)
-        except FirmwareAlreadyExists:
-            # Delete the duplicate firmware, and raise the Exception again
-            # for `/firmware/upload`
-            self._storage.delete(filename)
-            raise

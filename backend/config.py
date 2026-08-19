@@ -35,6 +35,10 @@ class Settings:
         self.data_dir = Path(os.environ.get("DATA_DIR", BACKEND_DIR / "data"))
         self.firmware_dir = Path(os.environ.get("FIRMWARE_DIR", self.data_dir / "firmware"))
         self.db_path = Path(os.environ.get("DB_PATH", self.data_dir / "app.db"))
+        # Resolved here with everything else. As a property re-reading the
+        # environment it could name a different database on each access than
+        # `db_path` does, and the two are used together.
+        self.database_url = os.environ.get("DATABASE_URL", f"sqlite:///{self.db_path}")
 
         self.keys_dir = Path(os.environ.get("KEYS_DIR", BACKEND_DIR / "keys"))
         self.private_key_path = Path(
@@ -59,12 +63,14 @@ class Settings:
             raise RuntimeError("JWT_SECRET must be at least 32 bytes. See backend/.env.example.")
         return secret
 
-    @property
-    def database_url(self) -> str:
-        return os.environ.get("DATABASE_URL", f"sqlite:///{self.db_path}")
-
     def read_private_key(self) -> bytes:
-        return self.private_key_path.read_bytes()
+        try:
+            return self.private_key_path.read_bytes()
+        except OSError as exc:
+            raise RuntimeError(
+                f"Signing key not readable at {self.private_key_path}. "
+                "Generate it with: uv run python backend/scripts/generate_keys.py"
+            ) from exc
 
 
 @lru_cache

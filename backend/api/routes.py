@@ -7,37 +7,44 @@ Device protocol:
 
 plus `POST /firmware/upload` for the admin frontend to publish signed firmware
 and `GET /api/devices` for the dashboard device page.
-Each handler reads the request, calls a use case, and shapes the response. Field
+Each handler reads the request, calls a use case, and returns a domain object;
+the `response_model` on the route decides which fields reach the wire. Field
 names and status codes follow what the ESP32 firmware in `esp32/main/ota.cpp`
 expects.
 """
 
 from __future__ import annotations
 
-import datetime
+from datetime import datetime, timezone
+from urllib.parse import quote
 
 from application.auth import AuthenticateUser, InvalidCredentials, RegisterUser, RegisterUserRequest
-from application.check_update import CheckUpdate, ModelNotFound
+from application.check_update import CheckUpdate, CheckUpdateRequest, ModelNotFound
+from application.deactivate_firmware import DeactivateFirmware
 from application.upload_firmware import UploadFirmware, UploadFirmwareRequest
-from domain.auth import MAX_PASSWORD_BYTES
+from domain import fleet
+from domain.auth import InvalidCredentialFormat
 from domain.firmware_image import InvalidFirmwareImage
-from domain.models import Firmware
+from domain.models import Role
+from domain.signing import InvalidManifestField
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from fastapi.responses import Response
 from ports.repository import (
     DeviceRepository,
     FirmwareAlreadyExists,
     FirmwareBinaryAlreadyExists,
+    FirmwareNotFound,
     FirmwareRepository,
     UserAlreadyExists,
 )
 from ports.storage import StorageBackend
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict
 
 from api.deps import (
     get_authenticate_user,
     get_check_update,
     get_current_user,
+    get_deactivate_firmware,
     get_device_repository,
     get_firmware_repository,
     get_register_user,
@@ -48,21 +55,29 @@ from api.deps import (
 
 router = APIRouter()
 
+
+class _FromDomain(BaseModel):
+    """Base for responses read off a domain dataclass.
+
+    Returning the dataclass itself would put every one of its fields on the
+    wire, and adding a field to the domain would publish it silently. Naming
+    the fields here keeps that decision in the route.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 """
 Auth
 """
 
 
+# Pydantic states the wire shape; what makes a credential acceptable is
+# `domain.auth.validate_credentials`, which `scripts/create_user.py` reaches
+# through the same use case.
 class RegisterRequest(BaseModel):
-    username: str = Field(min_length=1)
-    password: str = Field(min_length=8)
-
-    @field_validator("password")
-    @classmethod
-    def _fits_bcrypt(cls, v: str) -> str:
-        if len(v.encode("utf-8")) > MAX_PASSWORD_BYTES:
-            raise ValueError(f"password must be at most {MAX_PASSWORD_BYTES} bytes")
-        return v
+    username: str
+    password: str
 
 
 class LoginRequest(BaseModel):
@@ -75,17 +90,25 @@ class TokenResponse(BaseModel):
     token_type: str = "bearer"
 
 
+class UserResponse(_FromDomain):
+    id: int
+    username: str
+    role: Role
+
+
 @router.post("/api/auth/register", status_code=status.HTTP_201_CREATED)
 def register(
     body: RegisterRequest,
     use_case: RegisterUser = Depends(get_register_user),
-) -> dict:
+) -> UserResponse:
     """Open self-signup, always as an Operator. Admins are seeded via scripts/create_user.py."""
     try:
         user = use_case.execute(RegisterUserRequest(username=body.username, password=body.password))
+    except InvalidCredentialFormat as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     except UserAlreadyExists as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Username taken") from exc
-    return {"id": user.id, "username": user.username, "role": user.role.value}
+    return UserResponse.model_validate(user)
 
 
 @router.post("/api/auth/login")
@@ -110,30 +133,74 @@ Device protocol
 
 
 class CheckRequest(BaseModel):
+    """What `ota.cpp:check()` sends. Only `model` and `version` steer the answer.
+
+    The telemetry is required rather than optional: there is one device, it is
+    reflashed alongside the server, and a field that silently stopped arriving
+    would surface as a null column on the dashboard instead of a 422 here.
+    """
+
     model: str
     version: str
     device_id: str | None = None
+    poll_interval_seconds: int
+    rssi: int
+    ip: str
 
 
-@router.post("/api/check")
+class CheckResponse(_FromDomain):
+    """`exclude_none` on the route keeps the no-update answer a lone flag.
+
+    `ota.cpp` reads `update_available` first and the rest only when it is true,
+    so three explicit nulls would parse the same. Sending them anyway would put
+    a shape on the wire that no deployed device was built against.
+    """
+
+    update_available: bool
+    version: str | None = None
+    signature: str | None = None
+    download_url: str | None = None
+
+
+@router.post("/api/check", response_model_exclude_none=True)
 def check_update(
     body: CheckRequest,
     use_case: CheckUpdate = Depends(get_check_update),
-) -> dict:
+) -> CheckResponse:
     try:
-        result = use_case.execute(body.model, body.version, body.device_id)
+        result = use_case.execute(
+            CheckUpdateRequest(
+                model=body.model,
+                version=body.version,
+                device_id=body.device_id,
+                poll_interval_seconds=body.poll_interval_seconds,
+                rssi=body.rssi,
+                ip=body.ip,
+            )
+        )
     except ModelNotFound as exc:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN) from exc
 
-    if not result.update_available:
-        return {"update_available": False}
+    return CheckResponse.model_validate(result)
 
-    return {
-        "update_available": True,
-        "version": result.version,
-        "signature": result.signature,
-        "download_url": result.download_url,
-    }
+
+def _content_disposition(filename: str) -> str:
+    """Build a Content-Disposition value that survives any stored filename.
+
+    `original_filename` is whatever the uploader's browser sent, and header
+    values are latin-1 encoded on the way out, so a non-ASCII name raises
+    instead of being sent. RFC 6266 answers this with two parameters: a quoted
+    ASCII fallback, and a percent-encoded UTF-8 form that clients prefer when
+    they understand it. Anything outside printable ASCII becomes an underscore
+    in the fallback, which also keeps a quote or a newline in the name from
+    escaping the quoted string.
+    """
+    ascii_name = "".join(
+        c if c.isascii() and c.isprintable() and c not in '"\\' else "_" for c in filename
+    )
+    # `safe=""`: the default leaves `/` alone, and this is a filename, not a path.
+    encoded = quote(filename, safe="")
+    return f"attachment; filename=\"{ascii_name}\"; filename*=UTF-8''{encoded}"
 
 
 @router.get("/api/download/{firmware_id}")
@@ -147,18 +214,35 @@ def download_firmware(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
 
     data = storage.get(firmware.filename)
+    # The stored name is a hash. Offer a browser the name it was uploaded under;
+    # the device ignores the header and reads the stream.
+    download_name = firmware.original_filename or firmware.filename
     return Response(
         content=data,
         media_type="application/octet-stream",
-        headers={"Content-Disposition": f'attachment; filename="{firmware.filename}"'},
+        headers={"Content-Disposition": _content_disposition(download_name)},
     )
+
+
+class FirmwareResponse(_FromDomain):
+    id: int
+    model: str
+    version: str
+    filename: str
+    original_filename: str | None
+    signature: str
+    sha256: str
+    size_bytes: int
+    notes: str | None
+    active: bool
+    created_at: datetime
 
 
 @router.get("/api/firmware/list", dependencies=[Depends(get_current_user)])
 def firmware_list_api(
     repo: FirmwareRepository = Depends(get_firmware_repository),
-) -> list[Firmware]:
-    return repo.list_all()
+) -> list[FirmwareResponse]:
+    return [FirmwareResponse.model_validate(f) for f in repo.list_all()]
 
 
 """
@@ -166,21 +250,44 @@ Dashboard device page
 """
 
 
-@router.get("/api/devices", dependencies=[Depends(get_current_user)])
-def device_list_api(repo: DeviceRepository = Depends(get_device_repository)) -> list[dict]:
-    # SQLite hands back naive datetimes; they are UTC by construction, so stamp
-    # the offset or browsers would parse the ISO string as local time.
-    def _iso_utc(dt: datetime.datetime | None) -> str | None:
-        return dt.replace(tzinfo=datetime.timezone.utc).isoformat() if dt else None
+class DeviceResponse(BaseModel):
+    """A device row plus the one thing about it the database does not hold.
 
+    Built field by field rather than read off the dataclass, because `online`
+    has no attribute to read: it is `fleet.is_online` answered against the
+    clock at request time.
+    """
+
+    id: int
+    device_id: str
+    model: str
+    current_version: str | None
+    last_seen: datetime | None
+    poll_interval_seconds: int | None
+    rssi: int | None
+    ip: str | None
+    online: bool | None
+
+
+@router.get("/api/devices", dependencies=[Depends(get_current_user)])
+def device_list_api(
+    repo: DeviceRepository = Depends(get_device_repository),
+) -> list[DeviceResponse]:
+    # One clock reading for the whole list. Sampling per device would let two
+    # rows in the same response be judged against different moments.
+    now = datetime.now(timezone.utc)
     return [
-        {
-            "id": d.id,
-            "device_id": d.device_id,
-            "model": d.model,
-            "current_version": d.current_version,
-            "last_seen": _iso_utc(d.last_seen),
-        }
+        DeviceResponse(
+            id=d.id,
+            device_id=d.device_id,
+            model=d.model,
+            current_version=d.current_version,
+            last_seen=d.last_seen,
+            poll_interval_seconds=d.poll_interval_seconds,
+            rssi=d.rssi,
+            ip=d.ip,
+            online=fleet.is_online(d.last_seen, d.poll_interval_seconds, now),
+        )
         for d in repo.list_all()
     ]
 
@@ -190,15 +297,19 @@ Admin firmware upload
 """
 
 
+class UploadResponse(BaseModel):
+    status: str
+
+
 # Upload firmware require admin privilege
 @router.post("/firmware/upload", include_in_schema=False, dependencies=[Depends(require_admin)])
 def upload(
     model: str = Form(...),
     version: str = Form(...),
     firmware: UploadFile = File(...),
+    notes: str | None = Form(None),
     use_case: UploadFirmware = Depends(get_upload_firmware),
-) -> dict:
-    timestamp = datetime.datetime.now().strftime("%y%m%d_%H%M%S")
+) -> UploadResponse:
     data = firmware.file.read()
     try:
         use_case.execute(
@@ -207,10 +318,10 @@ def upload(
                 version=version,
                 original_filename=firmware.filename or "firmware.bin",
                 data=data,
-                timestamp=timestamp,
+                notes=notes,
             )
         )
-    except InvalidFirmwareImage as exc:
+    except (InvalidManifestField, InvalidFirmwareImage) as exc:
         # The validator's message names the field that failed, so pass it
         # through rather than flattening every rejection into one string.
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
@@ -224,4 +335,16 @@ def upload(
             status_code=status.HTTP_409_CONFLICT,
             detail="Version already exists for this model",
         ) from exc
-    return {"status": "ok"}
+    return UploadResponse(status="ok")
+
+
+@router.post("/api/firmware/{firmware_id}/deactivate", dependencies=[Depends(require_admin)])
+def deactivate_firmware(
+    firmware_id: int,
+    use_case: DeactivateFirmware = Depends(get_deactivate_firmware),
+) -> FirmwareResponse:
+    try:
+        firmware = use_case.execute(firmware_id)
+    except FirmwareNotFound as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND) from exc
+    return FirmwareResponse.model_validate(firmware)
