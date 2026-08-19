@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../auth/context';
+import { pickLatestActive } from '../version';
 import './DeviceList.css';
 
 interface ApiDevice {
@@ -11,8 +12,10 @@ interface ApiDevice {
 }
 
 interface Firmware {
+  id: number;
   model: string;
   version: string;
+  active: boolean;
   created_at: string;
 }
 
@@ -80,13 +83,21 @@ export default function DeviceList() {
     return () => clearInterval(timer);
   }, []);
 
+  // What the server would answer this model's devices, not what was uploaded
+  // last. Withdrawn rows are excluded and versions compare as tuples, so a
+  // hotfix on an older line does not mark the whole fleet outdated.
   const latestFirmwares = useMemo(() => {
-    return firmwares.reduce((acc, fw) => {
-      if (!acc[fw.model] || new Date(fw.created_at) > new Date(acc[fw.model].created_at)) {
-        acc[fw.model] = fw;
-      }
-      return acc;
-    }, {} as Record<string, Firmware>);
+    const byModel = new Map<string, Firmware[]>();
+    for (const fw of firmwares) {
+      byModel.set(fw.model, [...(byModel.get(fw.model) ?? []), fw]);
+    }
+
+    const latest: Record<string, Firmware> = {};
+    for (const [model, items] of byModel) {
+      const winner = pickLatestActive(items);
+      if (winner) latest[model] = winner;
+    }
+    return latest;
   }, [firmwares]);
 
   const devices = apiDevices.map(d => {
