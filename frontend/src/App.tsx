@@ -17,13 +17,13 @@ function SiderBar() {
     const handleMediaChange = (e: MediaQueryListEvent) => {
       setIsCollapsed(e.matches);
     };
-    
+
     if (mediaQuery.addEventListener) {
       mediaQuery.addEventListener('change', handleMediaChange);
     } else {
       mediaQuery.addListener(handleMediaChange);
     }
-  
+
     return () => {
       if (mediaQuery.removeEventListener) {
         mediaQuery.removeEventListener('change', handleMediaChange);
@@ -99,9 +99,9 @@ function SiderBar() {
             </div>
           </div>
         </div>
-        <button 
-          type="button" 
-          className="sidebar-toggle" 
+        <button
+          type="button"
+          className="sidebar-toggle"
           onClick={() => setIsCollapsed(!isCollapsed)}
           title={isCollapsed ? "展開選單" : "收合選單"}
         >

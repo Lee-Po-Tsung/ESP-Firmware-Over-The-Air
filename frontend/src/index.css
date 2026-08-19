@@ -4,13 +4,13 @@
   --bg-surface: #ffffff;
   --bg-subtle: #f3f4f6;
   --bg-surface-hover: #f4efe6;
-  
+
   /* Colors - Text */
   --text-primary: #171717;
   --text-secondary: #555555;
   --text-tertiary: #9ca3af;
   --text-inverse: #ffffff;
-  
+
   /* Colors - Border */
   --border-light: #e5dfd6;
   --border-dark: #b7b0a5;
@@ -20,15 +20,15 @@
   --color-success: #16a34a;
   --bg-success: #dcfce7;
   --text-success: #166534;
-  
+
   --color-error: #dc2626;
   --bg-error: #fee2e2;
   --text-error: #991b1b;
-  
+
   --color-warning: #f59e0b;
   --bg-warning: #fbe6cd;
   --text-warning: #8c5a1d;
-  
+
   --color-info: #3b82f6;
   --bg-info: #eff6ff;
   --text-info: #1d4ed8;
@@ -58,7 +58,7 @@
   --shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
   --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.05), 0 2px 4px -1px rgba(0,0,0,0.02);
   --shadow-lg: 0 12px 24px rgba(17,24,39,0.04);
-  
+
   /* Defaults */
   font: 16px/145% var(--font-sans);
   letter-spacing: 0.18px;
@@ -101,9 +101,7 @@ p {
   margin: 0;
 }
 
-/* =========================================
-   COMPONENTS
-   ========================================= */
+/* Components */
 
 /* 1. Cards */
 .card {
@@ -398,9 +396,7 @@ p {
   pointer-events: none;
 }
 
-/* =========================================
-   UTILITIES
-   ========================================= */
+/* Utilities */
 
 /* Typography - Families */
 .font-sans { font-family: var(--font-sans); }
