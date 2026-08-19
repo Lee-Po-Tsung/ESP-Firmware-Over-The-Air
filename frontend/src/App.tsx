@@ -36,8 +36,8 @@ function SiderBar() {
   if (pathname === '/login') return null;
 
   const navItems = [
-    { to: '/', index: '01', label: '韌體管理', hint: 'Firmware overview' },
-    { to: '/devices', index: '02', label: '裝置監控', hint: 'Connected ESP32 fleet' },
+    { to: '/', index: '01', label: 'Firmware', hint: 'Publish and retire versions' },
+    { to: '/devices', index: '02', label: 'Devices', hint: 'Connected ESP32 fleet' },
   ];
 
   function isActivePath(target: string) {
@@ -78,8 +78,8 @@ function SiderBar() {
             <div className="sidebar-account">
               {session ? (
                 <>
-                  <strong className="sidebar-account-name text-sm font-medium text-primary font-mono">{session.username === 'ops' ? 'ops 團隊' : session.username}</strong>
-                  <span className="sidebar-account-email text-xs text-tertiary font-mono">{session.username}@espfleet.io</span>
+                  <strong className="sidebar-account-name text-sm font-medium text-primary font-mono">{session.username}</strong>
+                  <span className="sidebar-account-role text-xs text-tertiary font-mono">{session.role}</span>
                 </>
               ) : (
                 <span className="sidebar-account-name text-sm font-medium text-primary font-mono">Guest</span>
@@ -89,7 +89,7 @@ function SiderBar() {
             <div className="sidebar-actions">
               {session ? (
                 <button type="button" className="sidebar-action sidebar-logout text-lg font-medium text-primary font-mono" onClick={logout}>
-                  <span>登出</span>
+                  <span>Log out</span>
                 </button>
               ) : (
                 <Link to="/login" className="sidebar-action sidebar-login text-lg font-medium text-primary font-mono">
@@ -103,7 +103,7 @@ function SiderBar() {
           type="button"
           className="sidebar-toggle"
           onClick={() => setIsCollapsed(!isCollapsed)}
-          title={isCollapsed ? "展開選單" : "收合選單"}
+          title={isCollapsed ? "Expand menu" : "Collapse menu"}
         >
           {isCollapsed ? ">" : "<"}
         </button>
