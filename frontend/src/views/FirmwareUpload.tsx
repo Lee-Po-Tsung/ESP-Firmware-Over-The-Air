@@ -8,7 +8,6 @@ export default function FirmwareUpload() {
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [selectedFileName, setSelectedFileName] = useState<string>('');
-  console.log(selectedFileName); // temp ignore elint
 
   async function handleSubmit(event: React.SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -62,12 +61,12 @@ export default function FirmwareUpload() {
     <div className="upload-container">
       <div className="card upload-card">
         <div className="upload-header">
-          <h1 className="text-xl font-bold text-primary">上傳新韌體</h1>
-          <p className="text-xs text-secondary">只接受 .bin 檔案；上傳後會自動簽署與發佈。</p>
+          <h1 className="text-xl font-bold text-primary">Publish firmware</h1>
+          <p className="text-xs text-secondary">The server signs the image on upload. Devices of this model are offered it on their next check.</p>
         </div>
         <form ref={formRef} onSubmit={handleSubmit}>
           <div className="form-group">
-            <label className="form-label">韌體檔案 (.bin)</label>
+            <label className="form-label" htmlFor="firmware-file">Firmware image (.bin)</label>
             <div className="dropzone">
               <input
                 id="firmware-file"
@@ -83,36 +82,38 @@ export default function FirmwareUpload() {
               />
               <div className="dropzone-content">
                 <span className="btn btn-secondary">
-                  + 選擇 .bin 檔案
+                  + Choose a .bin file
                 </span>
-                <span className="form-help">或拖曳檔案到這裡</span>
-                <span className="form-help">單一檔案上限 8 MB</span>
+                {selectedFileName
+                  ? <span className="form-help font-mono">{selectedFileName}</span>
+                  : <span className="form-help">or drop one here</span>}
               </div>
             </div>
           </div>
 
+          {/* Free text, not a list. `model` is whatever string the device sends
+              in `POST /api/check`, so a fixed list here is a second source of
+              truth that silently blocks any board not on it. */}
           <div className="form-group">
-            <label className="form-label">裝置型號</label>
-            <select name="model" defaultValue="ESP32-S3-DevKit" required className="form-select">
-              <option value="ESP32-S3-DevKit">ESP32-S3-DevKit</option>
-              <option value="ESP32-S3-Mini">ESP32-S3-Mini</option>
-              <option value="ESP8266-12F">ESP8266-12F</option>
-            </select>
+            <label className="form-label" htmlFor="firmware-model">Device model</label>
+            <input id="firmware-model" type="text" className="form-input" name="model" placeholder="ESP32-S3-DevKit" required />
+            <span className="form-help">Must match FIRMWARE_MODEL in the sketch, exactly.</span>
           </div>
 
           <div className="form-group">
-            <label className="form-label">版本號</label>
-            <input type="text" className="form-input" name="version" placeholder="2.4.2" required />
-            <span className="form-help">格式：主版號.次版號.修訂號</span>
+            <label className="form-label" htmlFor="firmware-version">Version</label>
+            <input id="firmware-version" type="text" className="form-input" name="version" placeholder="2.4.2" required />
+            <span className="form-help">Three numeric segments: major.minor.patch</span>
           </div>
 
           <div className="form-group">
-            <label className="form-label">更新說明</label>
+            <label className="form-label" htmlFor="firmware-notes">Release notes</label>
             <textarea
-              name="description"
+              id="firmware-notes"
+              name="notes"
               className="form-input"
               rows={4}
-              placeholder="這一版改了什麼？"
+              placeholder="What changed in this version?"
               style={{ resize: 'vertical' }}
             />
           </div>
@@ -124,7 +125,7 @@ export default function FirmwareUpload() {
           )}
 
           <button type="submit" className="btn btn-primary" style={{ width: '100%', marginTop: '0.9rem', padding: '0.82rem' }} disabled={submitting}>
-            上傳並發佈
+            {submitting ? 'Uploading...' : 'Upload and publish'}
           </button>
         </form>
       </div>
