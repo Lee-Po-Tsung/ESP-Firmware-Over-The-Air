@@ -150,16 +150,8 @@
 }
 
 .fw-withdraw-text,
-.fw-withdraw-warning,
 .fw-withdraw-error {
   margin: 0;
-}
-
-.fw-withdraw-warning {
-  padding: 0.5rem 0.6rem;
-  border-radius: var(--radius-sm);
-  background: var(--bg-warning);
-  color: var(--text-warning);
 }
 
 .fw-withdraw-error {

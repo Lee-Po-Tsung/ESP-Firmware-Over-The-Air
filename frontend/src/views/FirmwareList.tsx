@@ -1,10 +1,13 @@
 import { useState } from 'react';
 import { useAuth } from '../auth/context';
-import type { Firmware, FirmwareGroup } from '../pages/Firmware';
+import type { Firmware, FirmwareGroup } from '../firmware';
+import { usageKey } from '../firmware';
 import './FirmwareList.css';
 
-export default function FirmwareList({ groupedFirmwares, onWithdrawn }: {
+export default function FirmwareList({ groupedFirmwares, usage, usageKnown, onWithdrawn }: {
   groupedFirmwares: FirmwareGroup[];
+  usage: Record<string, number>;
+  usageKnown: boolean;
   onWithdrawn: (updated: Firmware) => void;
 }) {
   const { session } = useAuth();
@@ -97,6 +100,24 @@ export default function FirmwareList({ groupedFirmwares, onWithdrawn }: {
     return Math.round(bytes / 1024) + ' KB';
   }
 
+  /* Withdrawing is for retiring a version nothing depends on any more. The
+    latest one is what every device of the model is told to run, and a version
+    devices report running is one a rollback would still be reaching for, so
+    both are held. Returns why, or null when the version may go.
+
+    This is the dashboard's rule, not the server's: POST /api/firmware/{id}/
+    deactivate applies neither, so anything with a token can still withdraw. */
+  function lockReason(group: FirmwareGroup, item: Firmware): string | null {
+    if (group.latest?.id === item.id) return 'Latest version, cannot withdraw';
+    if (!usageKnown) return 'Device list unavailable, cannot withdraw';
+
+    const running = usage[usageKey(item.model, item.version)] ?? 0;
+    if (running > 0) {
+      return `${running} device${running === 1 ? '' : 's'} running this, cannot withdraw`;
+    }
+    return null;
+  }
+
   function lastPublished(group: FirmwareGroup) {
     return group.items.reduce((newest, item) =>
       new Date(item.created_at) > new Date(newest.created_at) ? item : newest,
@@ -143,6 +164,7 @@ export default function FirmwareList({ groupedFirmwares, onWithdrawn }: {
                       <div className="fw-history-list">
                         {group.items.map((item) => {
                           const isConfirming = confirmingId === item.id;
+                          const locked = lockReason(group, item);
 
                           return (
                             <div
@@ -166,26 +188,14 @@ export default function FirmwareList({ groupedFirmwares, onWithdrawn }: {
                                     route only deactivates. */}
                                 {!item.active ? (
                                   <span className="badge badge-warning">Withdrawn</span>
+                                ) : locked ? (
+                                  <span className="fw-history-status font-mono text-xs text-tertiary">{locked}</span>
                                 ) : !canWithdraw ? null : isConfirming ? (
                                   <div className="fw-withdraw-confirm">
                                     <p className="fw-withdraw-text font-mono text-xs text-tertiary">
                                       Stop offering v{item.version} to {group.model} devices? The file
                                       stays on the server and devices already running it are untouched.
                                     </p>
-
-                                    {/* Nothing is locked. Withdrawing the newest version is the
-                                        whole point of the feature, and withdrawing one that devices
-                                        are running harms nothing. Losing the last active version for
-                                        a model is the case worth warning about, and it is
-                                        recoverable by publishing again, so it warns rather than
-                                        blocks. */}
-                                    {group.activeCount === 1 && (
-                                      <p className="fw-withdraw-warning text-xs">
-                                        This is the last active version for {group.model}. Every device
-                                        of this model will get an error on its next check until you
-                                        publish another version.
-                                      </p>
-                                    )}
 
                                     {message && <p className="fw-withdraw-error text-xs">{message}</p>}
 

@@ -2,7 +2,7 @@ import React, { useRef, useState } from 'react';
 import { useAuth } from '../auth/context';
 import './FirmwareUpload.css';
 
-export default function FirmwareUpload() {
+export default function FirmwareUpload({ onUploaded }: { onUploaded: () => void }) {
   const { session } = useAuth();
   const formRef = useRef<HTMLFormElement>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -50,6 +50,7 @@ export default function FirmwareUpload() {
       setMessage('Firmware uploaded successfully.');
       form.reset();
       setSelectedFileName('');
+      onUploaded();
     } catch {
       setMessage('Cannot reach backend. Please make sure API server is running on port 1234.');
     } finally {
