@@ -4,26 +4,21 @@ import { useAuth } from '../auth/context';
 import './Login.css';
 
 export default function Login() {
-  const { login, register } = useAuth();
+  const { login } = useAuth();
   const navigate = useNavigate();
-  const [mode, setMode] = useState<'login' | 'register'>('login');
-  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [remember, setRemember] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  const registering = mode === 'register';
-
-  async function handleSubmit(event: React.SubmitEvent<HTMLFormElement>) {
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSubmitting(true);
     setError(null);
 
     try {
-      if (registering) {
-        await register(username, password);
-      }
-      await login(username, password);
+      await login(email, password);
       navigate('/');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Request failed');
@@ -32,67 +27,77 @@ export default function Login() {
     }
   }
 
-  function switchMode() {
-    setMode(registering ? 'login' : 'register');
-    setError(null);
-  }
-
   return (
     <div className="login-page">
-      <div className="login-card">
+      <div className="login-brand">
+        <div className="login-logo font-mono text-xs font-bold text-inverse">ESP</div>
+        <div className="login-brand-text">
+          <div className="login-brand-title text-2xl font-bold text-primary font-mono">ESPFleet</div>
+          <div className="login-brand-subtitle text-sm text-secondary font-mono">韌體發佈與裝置監控</div>
+        </div>
+      </div>
+
+      <div className="card login-card">
         <div className="login-header">
-          <h1>{registering ? 'Create Account' : 'Welcome Back'}</h1>
-          <p>
-            {registering
-              ? 'Register an account to browse firmware releases.'
-              : 'Sign in to manage firmware releases for your devices.'}
+          <h1 className="text-xl font-bold text-primary">登入控制台</h1>
+          <p className="text-sm text-secondary">
+            用你的工作帳號登入，即可管理韌體版本並查看所有裝置的即時狀態。
           </p>
         </div>
 
         <form className="login-form" onSubmit={handleSubmit}>
-          <label className="login-field">
-            Username
+          <div className="form-group">
+            <label className="form-label">電子郵件</label>
             <input
               type="text"
-              value={username}
-              onChange={e => setUsername(e.target.value)}
+              className="form-input"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
               autoComplete="username"
               required
             />
-          </label>
+          </div>
 
-          <label className="login-field">
-            Password
+          <div className="form-group">
+            <label className="form-label">密碼</label>
             <input
               type="password"
+              className="form-input"
               value={password}
               onChange={e => setPassword(e.target.value)}
-              autoComplete={registering ? 'new-password' : 'current-password'}
-              minLength={registering ? 8 : undefined}
+              autoComplete="current-password"
               required
             />
-          </label>
+          </div>
 
-          {error && <p className="login-error">{error}</p>}
+          <div className="login-form-actions">
+            <label className="login-remember text-sm text-primary">
+              <input
+                type="checkbox"
+                checked={remember}
+                onChange={e => setRemember(e.target.checked)}
+              />
+              記住這台電腦
+            </label>
+            <a href="#" className="login-forgot text-sm text-secondary">忘記密碼？</a>
+          </div>
 
-          <button type="submit" className="login-submit" disabled={submitting}>
-            {registering ? 'Create Account' : 'Sign In'}
+          {error && (
+            <div className="alert alert-error">
+              <span className="alert-title">登入失敗：</span>
+              {error}
+            </div>
+          )}
+
+          <button type="submit" className="btn btn-primary" style={{ width: '100%', marginTop: '0.5rem', padding: '0.8rem' }} disabled={submitting}>
+            登入
           </button>
         </form>
-
-        <p className="login-note">
-          {registering ? 'Already have an account? ' : 'New here? '}
-          <button type="button" className="login-switch" onClick={switchMode}>
-            {registering ? 'Sign in' : 'Create an account'}
-          </button>
-        </p>
-
-        {registering && (
-          <p className="login-note">
-            Self-signup creates an operator account; firmware upload stays admin-only.
-          </p>
-        )}
       </div>
+
+      <p className="login-footer text-xs text-secondary">
+        還沒有帳號？請聯絡你的組織管理員。
+      </p>
     </div>
   );
 }
