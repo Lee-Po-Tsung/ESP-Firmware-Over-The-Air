@@ -9,6 +9,8 @@ interface ApiDevice {
   model: string;
   current_version: string | null;
   last_seen: string | null;
+  ip: string | null;
+  rssi: number | null;
 }
 
 interface Firmware {
@@ -110,7 +112,9 @@ export default function DeviceList() {
       current_version: d.current_version || 'unknown',
       is_latest,
       last_seen: timeAgo(d.last_seen),
-      status: getStatus(d.last_seen) as 'online' | 'offline' | 'updating'
+      status: getStatus(d.last_seen) as 'online' | 'offline' | 'updating',
+      ip: d.ip,
+      rssi: d.rssi
     };
   });
 
@@ -127,7 +131,8 @@ export default function DeviceList() {
     const searchLower = searchQuery.toLowerCase();
     const matchesSearch = !searchQuery ||
       d.id.toLowerCase().includes(searchLower) ||
-      d.model.toLowerCase().includes(searchLower);
+      d.model.toLowerCase().includes(searchLower) ||
+      (d.ip && d.ip.toLowerCase().includes(searchLower));
 
     const matchesModel = selectedModel === 'all' || d.model === selectedModel;
     const matchesStatus = selectedStatus === 'all' || d.status === selectedStatus;
@@ -195,7 +200,7 @@ export default function DeviceList() {
             <input
               type="text"
               className="form-input"
-              placeholder="Search by name or model"
+              placeholder="Search by name, model, or IP"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />
@@ -240,6 +245,7 @@ export default function DeviceList() {
               <tr>
                 <th>Device</th>
                 <th>Firmware</th>
+                <th>Network</th>
                 <th>Last seen</th>
                 <th>Status</th>
               </tr>
@@ -258,6 +264,14 @@ export default function DeviceList() {
                   </td>
                   <td className="dev-col-fw">
                     <span className="dev-fw-text font-mono text-sm text-primary">{d.current_version}</span>
+                  </td>
+                  <td className="dev-col-network">
+                    <div className="dev-network-info font-mono text-sm text-primary">
+                      {d.ip || '—'}
+                    </div>
+                    <div className="dev-network-meta font-mono text-xs text-tertiary">
+                      {d.rssi != null ? `${d.rssi} dBm` : '—'}
+                    </div>
                   </td>
                   <td className="dev-col-seen font-mono text-sm text-secondary">
                     {d.last_seen}
