@@ -100,23 +100,7 @@ export default function FirmwareList({ groupedFirmwares, usage, usageKnown, onWi
     return Math.round(bytes / 1024) + ' KB';
   }
 
-  /* Withdrawing is for retiring a version nothing depends on any more. The
-    latest one is what every device of the model is told to run, and a version
-    devices report running is one a rollback would still be reaching for, so
-    both are held. Returns why, or null when the version may go.
 
-    This is the dashboard's rule, not the server's: POST /api/firmware/{id}/
-    deactivate applies neither, so anything with a token can still withdraw. */
-  function lockReason(group: FirmwareGroup, item: Firmware): string | null {
-    if (group.latest?.id === item.id) return 'Latest version, cannot withdraw';
-    if (!usageKnown) return 'Device list unavailable, cannot withdraw';
-
-    const running = usage[usageKey(item.model, item.version)] ?? 0;
-    if (running > 0) {
-      return `${running} device${running === 1 ? '' : 's'} running this, cannot withdraw`;
-    }
-    return null;
-  }
 
   function lastPublished(group: FirmwareGroup) {
     return group.items.reduce((newest, item) =>
@@ -164,7 +148,8 @@ export default function FirmwareList({ groupedFirmwares, usage, usageKnown, onWi
                       <div className="fw-history-list">
                         {group.items.map((item) => {
                           const isConfirming = confirmingId === item.id;
-                          const locked = lockReason(group, item);
+                          const activeItemsCount = group.items.filter(i => i.active).length;
+                          const isLastActiveVersion = item.active && activeItemsCount === 1;
 
                           return (
                             <div
@@ -188,14 +173,18 @@ export default function FirmwareList({ groupedFirmwares, usage, usageKnown, onWi
                                     route only deactivates. */}
                                 {!item.active ? (
                                   <span className="badge badge-warning">Withdrawn</span>
-                                ) : locked ? (
-                                  <span className="fw-history-status font-mono text-xs text-tertiary">{locked}</span>
                                 ) : !canWithdraw ? null : isConfirming ? (
                                   <div className="fw-withdraw-confirm">
                                     <p className="fw-withdraw-text font-mono text-xs text-tertiary">
                                       Stop offering v{item.version} to {group.model} devices? The file
                                       stays on the server and devices already running it are untouched.
                                     </p>
+
+                                    {isLastActiveVersion && (
+                                      <p className="fw-withdraw-warning text-xs font-bold">
+                                        Warning: This is the last active version for {group.model}.
+                                      </p>
+                                    )}
 
                                     {message && <p className="fw-withdraw-error text-xs">{message}</p>}
 

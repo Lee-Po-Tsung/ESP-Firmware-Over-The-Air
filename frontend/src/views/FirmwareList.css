@@ -161,6 +161,13 @@
   color: var(--text-error);
 }
 
+.fw-withdraw-warning {
+  padding: 0.5rem 0.6rem;
+  border-radius: var(--radius-sm);
+  background: var(--bg-warning);
+  color: var(--text-warning);
+}
+
 .fw-withdraw-actions {
   display: flex;
   gap: 0.5rem;
