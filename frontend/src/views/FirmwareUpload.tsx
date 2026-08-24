@@ -9,6 +9,10 @@ export default function FirmwareUpload({ onUploaded, knownModels = [] }: { onUpl
   const [message, setMessage] = useState<string | null>(null);
   const [selectedFileName, setSelectedFileName] = useState<string>('');
 
+  if (session?.role !== 'admin') {
+    return null;
+  }
+
   async function handleSubmit(event: React.SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
 
