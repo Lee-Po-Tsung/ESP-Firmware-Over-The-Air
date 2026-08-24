@@ -2,7 +2,7 @@ import React, { useRef, useState } from 'react';
 import { useAuth } from '../auth/context';
 import './FirmwareUpload.css';
 
-export default function FirmwareUpload({ onUploaded }: { onUploaded: () => void }) {
+export default function FirmwareUpload({ onUploaded, knownModels = [] }: { onUploaded: () => void, knownModels?: string[] }) {
   const { session } = useAuth();
   const formRef = useRef<HTMLFormElement>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -97,7 +97,10 @@ export default function FirmwareUpload({ onUploaded }: { onUploaded: () => void 
               truth that silently blocks any board not on it. */}
           <div className="form-group">
             <label className="form-label" htmlFor="firmware-model">Device model</label>
-            <input id="firmware-model" type="text" className="form-input" name="model" placeholder="ESP32-S3-DevKit" required />
+            <input id="firmware-model" list="firmware-models-list" type="text" className="form-input" name="model" placeholder="ESP32-S3-DevKit" required />
+            <datalist id="firmware-models-list">
+              {knownModels.map(m => <option key={m} value={m} />)}
+            </datalist>
             <span className="form-help">Must match FIRMWARE_MODEL in the sketch, exactly.</span>
           </div>
 

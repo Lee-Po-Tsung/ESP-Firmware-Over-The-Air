@@ -105,7 +105,7 @@ export default function Firmware() {
                 </div>
             </div>
             <div className="firmware-manage-card">
-                <FirmwareUpload onUploaded={load} />
+                <FirmwareUpload onUploaded={load} knownModels={groupedFirmwares.map(g => g.model)} />
                 <FirmwareList
                     groupedFirmwares={groupedFirmwares}
                     usage={usage}
