@@ -46,8 +46,6 @@ export default function DeviceList() {
   const [firmwares, setFirmwares] = useState<Firmware[]>([]);
   const [error, setError] = useState<string | null>(null);
 
-  const [time, setTime] = useState(new Date().toLocaleTimeString('zh-TW', { hour12: false }));
-
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedModel, setSelectedModel] = useState('all');
   const [selectedStatus, setSelectedStatus] = useState<'all' | 'online' | 'offline'>('all');
@@ -78,12 +76,6 @@ export default function DeviceList() {
     return () => clearInterval(interval);
   }, [session]);
 
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setTime(new Date().toLocaleTimeString('en-GB', { hour12: false }));
-    }, 1000);
-    return () => clearInterval(timer);
-  }, []);
 
   // What the server would answer this model's devices, not what was uploaded
   // last. Withdrawn rows are excluded and versions compare as tuples, so a
@@ -145,10 +137,6 @@ export default function DeviceList() {
       <div className="dev-header-area">
         <div className="dev-header-left">
           <h1 className="text-2xl font-bold text-primary">Devices</h1>
-        </div>
-        <div className="dev-live-indicator font-mono text-xs text-secondary">
-          <span className="live-dot"></span>
-          Live · {time}
         </div>
       </div>
 
