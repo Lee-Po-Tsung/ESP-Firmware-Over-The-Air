@@ -55,26 +55,26 @@ export default function FirmwareList({ groupedFirmwares, onWithdrawn }: {
       });
 
       if (res.status === 401) {
-        setMessage('Session expired. Please log in again.');
+        setMessage('登入階段已過期，請重新登入。');
         return;
       }
       if (res.status === 403) {
-        setMessage('Only admin accounts can withdraw a version.');
+        setMessage('只有管理員帳號可以下架版本。');
         return;
       }
       if (res.status === 404) {
-        setMessage('That version is no longer on record.');
+        setMessage('該版本已不在紀錄中。');
         return;
       }
       if (!res.ok) {
-        setMessage(`Withdraw failed (HTTP ${res.status})`);
+        setMessage(`下架失敗（HTTP ${res.status}）`);
         return;
       }
 
       onWithdrawn(await res.json() as Firmware);
       setConfirmingId(null);
     } catch {
-      setMessage('Cannot reach backend. Please make sure API server is running on port 1234.');
+      setMessage('無法連線到後端，請確認 API 伺服器正在執行。');
     } finally {
       setWithdrawingId(null);
     }
@@ -109,7 +109,7 @@ export default function FirmwareList({ groupedFirmwares, onWithdrawn }: {
         <div className="main-card-body">
           <div className="firmware-stack">
             {groupedFirmwares.length === 0 ? (
-              <div className="fw-empty-state text-sm text-secondary">No firmware versions yet.</div>
+              <div className="fw-empty-state text-sm text-secondary">尚未發布任何韌體版本。</div>
             ) : (
               groupedFirmwares.map((group) => {
                 const isExpanded = expandedGroups.has(group.model);
@@ -121,20 +121,20 @@ export default function FirmwareList({ groupedFirmwares, onWithdrawn }: {
                         <div className="fw-group-title-row">
                           <span className="fw-group-model font-mono text-lg text-primary">{group.model}</span>
                           {group.latest ? (
-                            <span className="badge badge-success">Latest v{group.latest.version}</span>
+                            <span className="badge badge-success">最新 v{group.latest.version}</span>
                           ) : (
                             /* Every device of this model gets a 403 on its next check
                               until a version is published again. */
-                            <span className="badge badge-warning">No active version</span>
+                            <span className="badge badge-warning">無上架版本</span>
                           )}
                         </div>
                         <div className="fw-group-subtitle font-mono text-xs text-secondary">
-                          Last published {formatTimestamp(lastPublished(group))}
+                          最後發布於 {formatTimestamp(lastPublished(group))}
                         </div>
                       </div>
                       <div className="fw-group-right">
                         <span className="fw-group-toggle-text font-mono text-base text-primary" onClick={() => toggleGroup(group.model)}>
-                          {isExpanded ? 'Collapse history' : 'Expand history'} ({group.count})
+                          {isExpanded ? '收合紀錄' : '展開紀錄'}（{group.count}）
                         </span>
                       </div>
                     </div>
@@ -165,12 +165,12 @@ export default function FirmwareList({ groupedFirmwares, onWithdrawn }: {
                                     existed. Nothing is offered to bring one back: the
                                     route only deactivates. */}
                                 {!item.active ? (
-                                  <span className="badge badge-warning">Withdrawn</span>
+                                  <span className="badge badge-warning">已下架</span>
                                 ) : !canWithdraw ? null : isConfirming ? (
                                   <div className="fw-withdraw-confirm">
                                     <p className="fw-withdraw-text font-mono text-xs text-tertiary">
-                                      Stop offering v{item.version} to {group.model} devices? The file
-                                      stays on the server and devices already running it are untouched.
+                                      不再將 v{item.version} 提供給 {group.model} 裝置？檔案會保留在伺服器上，
+                                      已經在跑這個版本的裝置不受影響。
                                     </p>
 
                                     {/* Nothing is locked. Withdrawing the newest version is the
@@ -181,9 +181,8 @@ export default function FirmwareList({ groupedFirmwares, onWithdrawn }: {
                                         blocks. */}
                                     {group.activeCount === 1 && (
                                       <p className="fw-withdraw-warning text-xs">
-                                        This is the last active version for {group.model}. Every device
-                                        of this model will get an error on its next check until you
-                                        publish another version.
+                                        這是 {group.model} 最後一個上架版本。在你發布下一個版本之前，
+                                        這個型號的每台裝置在下次回報時都會收到錯誤。
                                       </p>
                                     )}
 
@@ -196,7 +195,7 @@ export default function FirmwareList({ groupedFirmwares, onWithdrawn }: {
                                         onClick={() => withdraw(item.id)}
                                         disabled={withdrawingId === item.id}
                                       >
-                                        {withdrawingId === item.id ? 'Withdrawing...' : 'Confirm withdraw'}
+                                        {withdrawingId === item.id ? '下架中...' : '確認下架'}
                                       </button>
                                       <button
                                         type="button"
@@ -204,7 +203,7 @@ export default function FirmwareList({ groupedFirmwares, onWithdrawn }: {
                                         onClick={cancelConfirm}
                                         disabled={withdrawingId === item.id}
                                       >
-                                        Cancel
+                                        取消
                                       </button>
                                     </div>
                                   </div>
@@ -214,7 +213,7 @@ export default function FirmwareList({ groupedFirmwares, onWithdrawn }: {
                                     className="btn btn-outline"
                                     onClick={() => openConfirm(item.id)}
                                   >
-                                    Withdraw
+                                    下架
                                   </button>
                                 )}
                               </div>

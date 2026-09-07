@@ -88,15 +88,15 @@ export default function Firmware() {
         <div className="firmware-page">
             <div className="main-card-header firmware-dashboard-header">
                 <div className="header-titles">
-                    <h1 className="text-xl font-bold text-primary">Firmware</h1>
-                    <p className="text-xs text-secondary">Publish a new version and track the release history of each model. Devices pick it up on their next check.</p>
+                    <h1 className="text-xl font-bold text-primary">韌體管理</h1>
+                    <p className="text-xs text-secondary">發布新版本，並追蹤每個型號的發布紀錄。裝置會在下一次回報時取得更新。</p>
                 </div>
 
                 <div className="firmware-summary">
-                    <span className="firmware-summary-item font-mono text-xs text-primary">{groupedFirmwares.length} models</span>
-                    <span className="firmware-summary-item font-mono text-xs text-primary">{firmwares.length} versions</span>
+                    <span className="firmware-summary-item font-mono text-xs text-primary">{groupedFirmwares.length} 種型號</span>
+                    <span className="firmware-summary-item font-mono text-xs text-primary">{firmwares.length} 個版本</span>
                     {withdrawnCount > 0 && (
-                        <span className="firmware-summary-item font-mono text-xs text-primary">{withdrawnCount} withdrawn</span>
+                        <span className="firmware-summary-item font-mono text-xs text-primary">{withdrawnCount} 個已下架</span>
                     )}
                 </div>
             </div>
