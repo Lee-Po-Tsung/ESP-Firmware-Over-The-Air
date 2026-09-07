@@ -71,14 +71,15 @@ void loop() {
     if (WiFi.status() == WL_CONNECTED) {
         // If the version greater than esp32 version then ota
         if (check()) {
-            int count = 0;
-            while (!downloadFirmwareToFS()) {
-                count++;
-                if (count == 3) {
-                    ESP.restart();
-                }
+            // A failed update is not a reason to reboot. The device keeps
+            // running the image it has, check() stops offering a version that
+            // cannot succeed, and the unchanged version it reports on the next
+            // check-in is what surfaces the problem on the dashboard.
+            if (downloadFirmwareToFS()) {
+                OTA();  // Verifies the signature, flashes, and reboots into the new build
+            } else {
+                noteUpdateFailed("download");
             }
-            OTA();  // Verifies the signature, flashes, and reboots into the new build
         }
     } else {
         // If cannot reconnect then restart esp32

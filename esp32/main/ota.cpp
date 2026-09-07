@@ -18,7 +18,7 @@
 #include <mbedtls/pk.h>
 #include <mbedtls/sha256.h>
 
-#define FIRMWARE_VERSION "1.0.0"  // v1 (green); v2 build bumps this to 1.0.1 (red)
+#define FIRMWARE_VERSION "1.0.4"
 #define DEVICE_MODEL "ESP32"
 
 NetworkClientSecure* client = nullptr;
@@ -31,6 +31,15 @@ String signature;
 // A version already found to carry the running image, cached so the server
 // re-offering it costs no second download. RAM only, so a reboot re-learns it.
 String skipped_version;
+
+// A version whose update attempt did not complete, and how many attempts it
+// has cost. A failed update is not a reason to reboot: the device keeps
+// running the image it has. Without this it would re-download the same broken
+// version every poll forever, so check() consults it to stop offering one that
+// cannot succeed. Counted per version, so a newly published fix starts clean.
+// RAM only, like skipped_version.
+String failed_version;
+int failed_attempts = 0;
 
 String rootCACertificate;
 String rsaPublicKey;
@@ -335,6 +344,25 @@ bool loadConfig(String& ssid, String& password, String& identity, String& userna
     return true;
 }
 
+void noteUpdateFailed(const char* reason) {
+    if (version != failed_version) {
+        failed_version = version;
+        failed_attempts = 0;
+    }
+    failed_attempts++;
+    Serial.printf("Update to %s failed: %s (%d attempt(s) so far).\n", version.c_str(), reason,
+                  failed_attempts);
+}
+
+// Whether a version that has already failed `attempts` times is worth another
+// try on this check. Returning false makes check() ignore it until the server
+// offers a different version.
+bool shouldRetryFailedVersion(const String& candidate, int attempts) {
+    if (attempts > 3) return false;
+
+    return true;
+}
+
 // Check the server for an available firmware update
 bool check() {
     Serial.println("Current version: " + String(FIRMWARE_VERSION));
@@ -394,6 +422,13 @@ bool check() {
         return false;
     }
 
+    if (version == failed_version && !shouldRetryFailedVersion(version, failed_attempts)) {
+        Serial.println("Ignoring " + version + " after " + String(failed_attempts) +
+                       " failed attempt(s)");
+        delClient();
+        return false;
+    }
+
     signature = doc["signature"].as<String>();
     download_path = doc["download_url"].as<String>();
     return true;
@@ -427,6 +462,7 @@ bool downloadFirmwareToFS() {
         delClient();
         return false;
     }
+
     delClient();
     return true;
 }
@@ -498,6 +534,7 @@ void OTA() {
     if (fileSha256.isEmpty()) {
         Serial.println("Error: Failed to open /firmware.bin for hashing.");
         LittleFS.remove("/firmware.bin");
+        noteUpdateFailed("hash");
         return;
     }
     Serial.println("SHA-256: " + fileSha256);
@@ -512,6 +549,7 @@ void OTA() {
     } else {
         Serial.println("Error: Digital signature verification failed.");
         LittleFS.remove("/firmware.bin");
+        noteUpdateFailed("signature");
         return;
     }
 
@@ -521,6 +559,7 @@ void OTA() {
             "Error: Downgrade attack detected. Version %s is not newer than current %s.\n",
             version.c_str(), FIRMWARE_VERSION);
         LittleFS.remove("/firmware.bin");
+        noteUpdateFailed("downgrade");
         return;
     }
 
@@ -537,6 +576,7 @@ void OTA() {
     File updateBin = LittleFS.open("/firmware.bin", "r");
     if (!updateBin) {
         Serial.println("Error: Failed to open /firmware.bin for flashing.");
+        noteUpdateFailed("open");
         return;
     }
     size_t updateSize = updateBin.size();
@@ -556,14 +596,17 @@ void OTA() {
                 Serial.printf("Progress: %u / %u\n", Update.progress(), Update.size());
                 updateBin.close();
                 LittleFS.remove("/firmware.bin");
+                noteUpdateFailed("write");
             }
         } else {
             Serial.printf("Update.end() failed: %s\n", Update.errorString());
             updateBin.close();
             LittleFS.remove("/firmware.bin");
+            noteUpdateFailed("end");
         }
     } else {
         Serial.println("Not enough space to begin update");
         updateBin.close();
+        noteUpdateFailed("space");
     }
 }
