@@ -6,9 +6,8 @@ import './Login.css';
 export default function Login() {
   const { login } = useAuth();
   const navigate = useNavigate();
-  const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [remember, setRemember] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -18,7 +17,7 @@ export default function Login() {
     setError(null);
 
     try {
-      await login(email, password);
+      await login(username, password);
       navigate('/');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Request failed');
@@ -47,12 +46,12 @@ export default function Login() {
 
         <form className="login-form" onSubmit={handleSubmit}>
           <div className="form-group">
-            <label className="form-label">電子郵件</label>
+            <label className="form-label">使用者名稱</label>
             <input
               type="text"
               className="form-input"
-              value={email}
-              onChange={e => setEmail(e.target.value)}
+              value={username}
+              onChange={e => setUsername(e.target.value)}
               autoComplete="username"
               required
             />
@@ -68,18 +67,6 @@ export default function Login() {
               autoComplete="current-password"
               required
             />
-          </div>
-
-          <div className="login-form-actions">
-            <label className="login-remember text-sm text-primary">
-              <input
-                type="checkbox"
-                checked={remember}
-                onChange={e => setRemember(e.target.checked)}
-              />
-              記住這台電腦
-            </label>
-            <a href="#" className="login-forgot text-sm text-secondary">忘記密碼？</a>
           </div>
 
           {error && (
