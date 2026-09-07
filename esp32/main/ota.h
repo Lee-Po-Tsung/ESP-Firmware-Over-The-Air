@@ -18,5 +18,6 @@ bool loadConfig(String& ssid, String& password, String& identity, String& userna
 bool check();
 bool downloadFirmwareToFS();
 void OTA();
+void noteUpdateFailed(const char* reason);
 bool syncTimeSNTP();
 void markFirmwareValid();

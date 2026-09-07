@@ -62,6 +62,8 @@ def _to_device(row: DeviceRow) -> Device:
         poll_interval_seconds=row.poll_interval_seconds,
         rssi=row.rssi,
         ip=row.ip,
+        last_error=row.last_error,
+        failed_attempts=row.failed_attempts,
     )
 
 
@@ -183,6 +185,11 @@ class SqliteDeviceRepository(DeviceRepository):
         row.poll_interval_seconds = device.poll_interval_seconds
         row.rssi = device.rssi
         row.ip = device.ip
+        # Assigned unconditionally like every other column: the device resends
+        # its error on every check-in until a flash succeeds, so clearing it
+        # here is how a recovered device stops showing one.
+        row.last_error = device.last_error
+        row.failed_attempts = device.failed_attempts
         try:
             self._session.commit()
         except IntegrityError as exc:
@@ -193,9 +200,10 @@ class SqliteDeviceRepository(DeviceRepository):
             #
             # The other two write methods here answer their own version of this
             # by raising a domain exception, but neither of them is on the
-            # device's path: `main.ino` reboots over a failed check. The winner
-            # is the same device reporting moments earlier, so its row is
-            # returned as it stands and this check-in is dropped. Rollback
+            # device's path: a device that gets no answer simply checks in
+            # again one interval later. The winner is the same device reporting
+            # moments earlier, so its row is returned as it stands and this
+            # check-in is dropped. Rollback
             # expunges the row built above, which is why this reads again
             # instead of refreshing.
             self._session.rollback()

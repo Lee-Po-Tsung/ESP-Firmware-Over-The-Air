@@ -62,23 +62,25 @@ void setup() {
 
 void loop() {
     // Show this build's colour first, so it is visible before any OTA kicks in.
-    // v1.0.0 = green, v1.0.1 = red. This line is the only per-version difference.
-    Serial.println("LED: GREEN (running v1.0.0)");
-    neopixelWrite(RGB_BUILTIN, 0, 64, 0);
+    // The colour is the only per-version difference, so it is what tells you
+    // by eye which build a device came back on after an update.
+    Serial.println("LED: PURPLE (running v1.0.4)");
+    neopixelWrite(RGB_BUILTIN, 48, 0, 64);
     delay(POLL_INTERVAL_SECONDS * 1000);  // hold the colour, then re-check for an update
 
     // If wifi connected then check the latest firmware
     if (WiFi.status() == WL_CONNECTED) {
         // If the version greater than esp32 version then ota
         if (check()) {
-            int count = 0;
-            while (!downloadFirmwareToFS()) {
-                count++;
-                if (count == 3) {
-                    ESP.restart();
-                }
+            // A failed update is not a reason to reboot. The device keeps
+            // running the image it has, check() stops offering a version that
+            // cannot succeed, and the unchanged version it reports on the next
+            // check-in is what surfaces the problem on the dashboard.
+            if (downloadFirmwareToFS()) {
+                OTA();  // Verifies the signature, flashes, and reboots into the new build
+            } else {
+                noteUpdateFailed("download");
             }
-            OTA();  // Verifies the signature, flashes, and reboots into the new build
         }
     } else {
         // If cannot reconnect then restart esp32

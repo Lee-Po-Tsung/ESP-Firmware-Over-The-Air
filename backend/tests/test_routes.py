@@ -135,6 +135,77 @@ def test_check_update_records_device_checkin(client):
     assert devices.devices["dev-1"].current_version == "1.1.0"
 
 
+def test_check_update_records_a_reported_update_failure(client):
+    latest = make_firmware(version="1.2.0", firmware_id=42)
+    devices = FakeDeviceRepository()
+    app.dependency_overrides[get_check_update] = lambda: CheckUpdate(
+        FakeFirmwareRepository([latest]), devices
+    )
+
+    client.post(
+        "/api/check",
+        json=check_payload(device_id="dev-1", last_error="signature", failed_attempts=2),
+    )
+
+    assert devices.devices["dev-1"].last_error == "signature"
+    assert devices.devices["dev-1"].failed_attempts == 2
+
+
+def test_check_update_accepts_a_device_reporting_no_failure(client):
+    """The field is optional so firmware built before it exists still checks in.
+
+    Required telemetry would 422 the whole fleet off the dashboard over a
+    field that only means something after an update has already gone wrong.
+    """
+    latest = make_firmware(version="1.2.0", firmware_id=42)
+    devices = FakeDeviceRepository()
+    app.dependency_overrides[get_check_update] = lambda: CheckUpdate(
+        FakeFirmwareRepository([latest]), devices
+    )
+
+    response = client.post("/api/check", json=check_payload(device_id="dev-1"))
+
+    assert response.status_code == 200
+    assert devices.devices["dev-1"].last_error is None
+
+
+def test_check_update_clears_a_failure_the_device_stopped_reporting(client):
+    """A recovered device stops sending the field, and the row has to follow.
+
+    The device resends its error on every check-in until a flash succeeds, so
+    an absent one means it is gone, not that nothing was said this time.
+    """
+    latest = make_firmware(version="1.2.0", firmware_id=42)
+    devices = FakeDeviceRepository()
+    app.dependency_overrides[get_check_update] = lambda: CheckUpdate(
+        FakeFirmwareRepository([latest]), devices
+    )
+
+    client.post(
+        "/api/check",
+        json=check_payload(device_id="dev-1", last_error="signature", failed_attempts=2),
+    )
+    client.post("/api/check", json=check_payload(device_id="dev-1"))
+
+    assert devices.devices["dev-1"].last_error is None
+    assert devices.devices["dev-1"].failed_attempts is None
+
+
+def test_check_update_rejects_an_oversized_error_token(client):
+    """`/api/check` is unauthenticated, so the one free-text field is bounded."""
+    latest = make_firmware(version="1.2.0", firmware_id=42)
+    app.dependency_overrides[get_check_update] = lambda: CheckUpdate(
+        FakeFirmwareRepository([latest]), FakeDeviceRepository()
+    )
+
+    response = client.post(
+        "/api/check",
+        json=check_payload(device_id="dev-1", last_error="x" * 65),
+    )
+
+    assert response.status_code == 422
+
+
 def test_download_firmware_returns_404_for_unknown_id(client):
     app.dependency_overrides[get_firmware_repository] = lambda: FakeFirmwareRepository()
     app.dependency_overrides[get_storage] = lambda: FakeStorage()
@@ -326,6 +397,8 @@ def test_device_list_returns_devices_with_utc_last_seen(client):
             "poll_interval_seconds": None,
             "rssi": None,
             "ip": None,
+            "last_error": None,
+            "failed_attempts": None,
             "online": None,
         }
     ]

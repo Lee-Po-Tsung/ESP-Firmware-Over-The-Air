@@ -38,7 +38,7 @@ from ports.repository import (
     UserAlreadyExists,
 )
 from ports.storage import StorageBackend
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from api.deps import (
     get_authenticate_user,
@@ -146,6 +146,12 @@ class CheckRequest(BaseModel):
     poll_interval_seconds: int
     rssi: int
     ip: str
+    # Optional where the telemetry above is required, because there is nothing
+    # to report until an update has actually failed. Requiring it would 422 a
+    # healthy fleet off the dashboard. Bounded because this route is
+    # unauthenticated and the value is stored and rendered.
+    last_error: str | None = Field(default=None, max_length=64)
+    failed_attempts: int | None = None
 
 
 class CheckResponse(_FromDomain):
@@ -176,6 +182,8 @@ def check_update(
                 poll_interval_seconds=body.poll_interval_seconds,
                 rssi=body.rssi,
                 ip=body.ip,
+                last_error=body.last_error,
+                failed_attempts=body.failed_attempts,
             )
         )
     except ModelNotFound as exc:
@@ -266,6 +274,8 @@ class DeviceResponse(BaseModel):
     poll_interval_seconds: int | None
     rssi: int | None
     ip: str | None
+    last_error: str | None
+    failed_attempts: int | None
     online: bool | None
 
 
@@ -286,6 +296,8 @@ def device_list_api(
             poll_interval_seconds=d.poll_interval_seconds,
             rssi=d.rssi,
             ip=d.ip,
+            last_error=d.last_error,
+            failed_attempts=d.failed_attempts,
             online=fleet.is_online(d.last_seen, d.poll_interval_seconds, now),
         )
         for d in repo.list_all()
