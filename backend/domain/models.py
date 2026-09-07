@@ -94,4 +94,6 @@ class Device:
     poll_interval_seconds: int | None = None
     rssi: int | None = None
     ip: str | None = None
+    last_error: str | None = None
+    failed_attempts: int | None = None
     id: int | None = None

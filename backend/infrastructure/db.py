@@ -67,6 +67,8 @@ class DeviceRow(Base):
     poll_interval_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
     rssi: Mapped[int | None] = mapped_column(Integer, nullable=True)
     ip: Mapped[str | None] = mapped_column(String, nullable=True)
+    last_error: Mapped[str | None] = mapped_column(String, nullable=True)
+    failed_attempts: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
 
 def make_engine():

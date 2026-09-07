@@ -36,6 +36,8 @@ class CheckUpdateRequest:
     poll_interval_seconds: int | None = None
     rssi: int | None = None
     ip: str | None = None
+    last_error: str | None = None
+    failed_attempts: int | None = None
 
 
 @dataclass
@@ -69,6 +71,8 @@ class CheckUpdate:
                     poll_interval_seconds=req.poll_interval_seconds,
                     rssi=req.rssi,
                     ip=req.ip,
+                    last_error=req.last_error,
+                    failed_attempts=req.failed_attempts,
                 )
             )
 
