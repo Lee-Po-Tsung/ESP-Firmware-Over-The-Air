@@ -9,6 +9,27 @@ interface ApiDevice {
   model: string;
   current_version: string | null;
   last_seen: string | null;
+  last_error: string | null;
+  failed_attempts: number | null;
+}
+
+// The device sends a short stable token, not a sentence, so rewording here
+// costs no reflash. An unknown token is shown as-is rather than dropped: a
+// device reporting something this build has never heard of is exactly the
+// case worth seeing.
+const ERROR_LABELS: Record<string, string> = {
+  download: '下載失敗',
+  hash: '無法讀取下載的檔案',
+  signature: '簽章驗證失敗',
+  downgrade: '版本不比目前新，已拒絕',
+  open: '無法開啟映像檔',
+  write: '寫入分割區時發生錯誤',
+  end: '寫入完成檢查失敗',
+  space: '分割區空間不足',
+};
+
+function errorLabel(token: string): string {
+  return ERROR_LABELS[token] ?? token;
 }
 
 interface Firmware {
@@ -110,14 +131,16 @@ export default function DeviceList() {
       current_version: d.current_version || '未知',
       is_latest,
       last_seen: timeAgo(d.last_seen),
+      last_error: d.last_error,
+      failed_attempts: d.failed_attempts,
       status: getStatus(d.last_seen) as 'online' | 'offline' | 'updating'
     };
   });
 
   const onlineCount = devices.filter(d => d.status === 'online').length;
   const offlineCount = devices.filter(d => d.status === 'offline').length;
-  const updatingCount = devices.filter(d => d.status === 'updating').length;
   const outdatedDevices = devices.filter(d => !d.is_latest);
+  const failedDevices = devices.filter(d => d.last_error);
   const uniqueModels = Array.from(new Set([
     'ESP32-S3-DevKit',
     'ESP32-S3-Mini',
@@ -171,9 +194,9 @@ export default function DeviceList() {
           <div className="dev-card-desc text-xs text-tertiary">超過 60 秒未回報</div>
         </div>
         <div className="card dev-card">
-          <div className="dev-card-title text-xs text-secondary font-medium">更新中</div>
-          <div className="dev-card-value text-3xl font-medium font-mono text-info">{updatingCount}</div>
-          <div className="dev-card-desc text-xs text-tertiary">正在寫入韌體</div>
+          <div className="dev-card-title text-xs text-secondary font-medium">更新失敗</div>
+          <div className="dev-card-value text-3xl font-medium font-mono text-error">{failedDevices.length}</div>
+          <div className="dev-card-desc text-xs text-tertiary">仍在跑舊版韌體</div>
         </div>
         <div className="card dev-card">
           <div className="dev-card-title text-xs text-secondary font-medium">韌體落後</div>
@@ -181,6 +204,13 @@ export default function DeviceList() {
           <div className="dev-card-desc text-xs text-tertiary">回報後會自動更新</div>
         </div>
       </div>
+
+      {failedDevices.length > 0 && (
+        <div className="alert alert-error">
+          <span className="alert-title">有裝置更新失敗：</span>
+          {failedDevices.map(d => `${d.id}（${errorLabel(d.last_error!)}）`).join('、')}。裝置沒有重開機，仍在跑原本的韌體，同一個版本連續失敗超過 3 次後就不會再重試。
+        </div>
+      )}
 
       {outdatedDevices.length > 0 && (
         <div className="alert alert-warning">
@@ -263,6 +293,12 @@ export default function DeviceList() {
                   </td>
                   <td className="dev-col-fw">
                     <span className="dev-fw-text font-mono text-sm text-primary">{d.current_version}</span>
+                    {d.last_error && (
+                      <div className="dev-fw-error text-xs">
+                        {errorLabel(d.last_error)}
+                        {d.failed_attempts ? ` · 失敗 ${d.failed_attempts} 次` : ''}
+                      </div>
+                    )}
                   </td>
                   <td className="dev-col-seen font-mono text-sm text-secondary">
                     {d.last_seen}
