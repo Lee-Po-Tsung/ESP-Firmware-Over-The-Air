@@ -16,7 +16,6 @@ export interface Session {
 export interface AuthContextValue {
   session: Session | null;
   login: (username: string, password: string) => Promise<void>;
-  register: (username: string, password: string) => Promise<void>;
   logout: () => void;
 }
 

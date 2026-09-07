@@ -28,7 +28,7 @@ The SQLite database and firmware binaries live under `backend/data/`; the keys u
 
 ## Accounts and Auth
 
-Dashboard access uses accounts with two roles: `admin` (can publish firmware) and `operator` (read-only for now). Log in at `POST /api/auth/login` to get a JWT; send it as `Authorization: Bearer <token>` on protected endpoints. Self-signup at `POST /api/auth/register` creates an operator; seed admins with `scripts/create_user.py`. The device endpoints (`/api/check`, `/api/download`) stay unauthenticated.
+Dashboard access uses accounts with two roles: `admin` (can publish firmware) and `operator` (read-only for now). Log in at `POST /api/auth/login` to get a JWT; send it as `Authorization: Bearer <token>` on protected endpoints. There is no registration endpoint: accounts are created with `scripts/create_user.py`, which needs shell access to the server. The device endpoints (`/api/check`, `/api/download`) stay unauthenticated.
 
 ### Run
 

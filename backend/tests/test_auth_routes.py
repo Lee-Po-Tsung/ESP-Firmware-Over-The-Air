@@ -120,34 +120,12 @@ def upload_files():
     }
 
 
-def test_register_creates_operator(users, client):
+def test_no_registration_route_exists(users, client):
+    # What makes a credential acceptable is covered at the domain layer in
+    # test_auth.py, which is the path `scripts/create_user.py` takes.
     res = client.post("/api/auth/register", json={"username": "bob", "password": "s3cretpw"})
 
-    assert res.status_code == 201
-    assert res.json()["role"] == "operator"
-    assert users.get_by_username("bob") is not None
-
-
-def test_register_rejects_short_password(users, client):
-    # 400, not Pydantic's 422: what makes a credential acceptable is a domain
-    # rule, so `scripts/create_user.py` is held to it through the same path.
-    res = client.post("/api/auth/register", json={"username": "bob", "password": "short"})
-
-    assert res.status_code == 400
-    assert users.get_by_username("bob") is None
-
-
-def test_register_rejects_empty_username(users, client):
-    res = client.post("/api/auth/register", json={"username": "", "password": "long-enough"})
-
-    assert res.status_code == 400
-    assert users.get_by_username("") is None
-
-
-def test_register_rejects_password_over_bcrypt_limit(users, client):
-    res = client.post("/api/auth/register", json={"username": "bob", "password": "x" * 73})
-
-    assert res.status_code == 400
+    assert res.status_code == 404
     assert users.get_by_username("bob") is None
 
 
@@ -158,14 +136,6 @@ def test_login_rejects_overlong_password_as_401(users, client):
     res = client.post("/api/auth/login", json={"username": "bob", "password": "x" * 73})
 
     assert res.status_code == 401
-
-
-def test_register_rejects_duplicate_username(users, client):
-    seed_user(users, "bob", "s3cretpw", Role.OPERATOR)
-
-    res = client.post("/api/auth/register", json={"username": "bob", "password": "s3cretpw"})
-
-    assert res.status_code == 409
 
 
 def test_login_rejects_bad_password(users, client):

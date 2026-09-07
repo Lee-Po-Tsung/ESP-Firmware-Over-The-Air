@@ -18,14 +18,12 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from urllib.parse import quote
 
-from application.auth import AuthenticateUser, InvalidCredentials, RegisterUser, RegisterUserRequest
+from application.auth import AuthenticateUser, InvalidCredentials
 from application.check_update import CheckUpdate, CheckUpdateRequest, ModelNotFound
 from application.deactivate_firmware import DeactivateFirmware
 from application.upload_firmware import UploadFirmware, UploadFirmwareRequest
 from domain import fleet
-from domain.auth import InvalidCredentialFormat
 from domain.firmware_image import InvalidFirmwareImage
-from domain.models import Role
 from domain.signing import InvalidManifestField
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from fastapi.responses import Response
@@ -35,7 +33,6 @@ from ports.repository import (
     FirmwareBinaryAlreadyExists,
     FirmwareNotFound,
     FirmwareRepository,
-    UserAlreadyExists,
 )
 from ports.storage import StorageBackend
 from pydantic import BaseModel, ConfigDict, Field
@@ -47,7 +44,6 @@ from api.deps import (
     get_deactivate_firmware,
     get_device_repository,
     get_firmware_repository,
-    get_register_user,
     get_storage,
     get_upload_firmware,
     require_admin,
@@ -72,14 +68,6 @@ Auth
 """
 
 
-# Pydantic states the wire shape; what makes a credential acceptable is
-# `domain.auth.validate_credentials`, which `scripts/create_user.py` reaches
-# through the same use case.
-class RegisterRequest(BaseModel):
-    username: str
-    password: str
-
-
 class LoginRequest(BaseModel):
     username: str
     password: str
@@ -88,27 +76,6 @@ class LoginRequest(BaseModel):
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
-
-
-class UserResponse(_FromDomain):
-    id: int
-    username: str
-    role: Role
-
-
-@router.post("/api/auth/register", status_code=status.HTTP_201_CREATED)
-def register(
-    body: RegisterRequest,
-    use_case: RegisterUser = Depends(get_register_user),
-) -> UserResponse:
-    """Open self-signup, always as an Operator. Admins are seeded via scripts/create_user.py."""
-    try:
-        user = use_case.execute(RegisterUserRequest(username=body.username, password=body.password))
-    except InvalidCredentialFormat as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
-    except UserAlreadyExists as exc:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Username taken") from exc
-    return UserResponse.model_validate(user)
 
 
 @router.post("/api/auth/login")

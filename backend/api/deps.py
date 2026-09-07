@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 
-from application.auth import AuthenticateUser, RegisterUser
+from application.auth import AuthenticateUser
 from application.check_update import CheckUpdate
 from application.deactivate_firmware import DeactivateFirmware
 from application.upload_firmware import UploadFirmware
@@ -75,10 +75,6 @@ def get_deactivate_firmware(
     repo: FirmwareRepository = Depends(get_firmware_repository),
 ) -> DeactivateFirmware:
     return DeactivateFirmware(repo)
-
-
-def get_register_user(repo: UserRepository = Depends(get_user_repository)) -> RegisterUser:
-    return RegisterUser(repo)
 
 
 def get_authenticate_user(
