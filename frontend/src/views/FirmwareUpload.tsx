@@ -2,11 +2,16 @@ import React, { useRef, useState } from 'react';
 import { useAuth } from '../auth/context';
 import './FirmwareUpload.css';
 
+// Outcome rides alongside the text instead of being sniffed back out of it.
+// The alert styling used to key off the string containing "success", which any
+// rewording (a translation included) silently turns into a permanent error style.
+type Notice = { text: string; ok: boolean };
+
 export default function FirmwareUpload() {
   const { session } = useAuth();
   const formRef = useRef<HTMLFormElement>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
+  const [notice, setNotice] = useState<Notice | null>(null);
   const [selectedFileName, setSelectedFileName] = useState<string>('');
 
   async function handleSubmit(event: React.SubmitEvent<HTMLFormElement>) {
@@ -18,7 +23,7 @@ export default function FirmwareUpload() {
     }
 
     setSubmitting(true);
-    setMessage(null);
+    setNotice(null);
 
     try {
       const res = await fetch('/backend/firmware/upload', {
@@ -28,30 +33,30 @@ export default function FirmwareUpload() {
       });
 
       if (res.status === 401) {
-        setMessage('Session expired. Please log in again.');
+        setNotice({ text: '登入階段已過期，請重新登入。', ok: false });
         return;
       }
       if (res.status === 403) {
-        setMessage('Only admin accounts can upload firmware.');
+        setNotice({ text: '只有管理員帳號可以發布韌體。', ok: false });
         return;
       }
       // Several distinct causes share these codes, and the backend already
       // names which one in `detail`, so show it rather than mirroring the list.
       if (res.status === 400 || res.status === 409) {
         const body = await res.json().catch(() => null);
-        setMessage(body?.detail ?? `Upload failed (HTTP ${res.status})`);
+        setNotice({ text: body?.detail ?? `上傳失敗（HTTP ${res.status}）`, ok: false });
         return;
       }
       if (!res.ok) {
-        setMessage(`Upload failed (HTTP ${res.status})`);
+        setNotice({ text: `上傳失敗（HTTP ${res.status}）`, ok: false });
         return;
       }
 
-      setMessage('Firmware uploaded successfully.');
+      setNotice({ text: '韌體已發布。', ok: true });
       form.reset();
       setSelectedFileName('');
     } catch {
-      setMessage('Cannot reach backend. Please make sure API server is running on port 1234.');
+      setNotice({ text: '無法連線到後端，請確認 API 伺服器正在執行。', ok: false });
     } finally {
       setSubmitting(false);
     }
@@ -61,12 +66,12 @@ export default function FirmwareUpload() {
     <div className="upload-container">
       <div className="card upload-card">
         <div className="upload-header">
-          <h1 className="text-xl font-bold text-primary">Publish firmware</h1>
-          <p className="text-xs text-secondary">The server signs the image on upload. Devices of this model are offered it on their next check.</p>
+          <h1 className="text-xl font-bold text-primary">發布韌體</h1>
+          <p className="text-xs text-secondary">上傳後由伺服器簽署。同型號的裝置會在下一次回報時取得這個版本。</p>
         </div>
         <form ref={formRef} onSubmit={handleSubmit}>
           <div className="form-group">
-            <label className="form-label" htmlFor="firmware-file">Firmware image (.bin)</label>
+            <label className="form-label" htmlFor="firmware-file">韌體映像檔（.bin）</label>
             <div className="dropzone">
               <input
                 id="firmware-file"
@@ -82,11 +87,11 @@ export default function FirmwareUpload() {
               />
               <div className="dropzone-content">
                 <span className="btn btn-secondary">
-                  + Choose a .bin file
+                  + 選擇 .bin 檔
                 </span>
                 {selectedFileName
                   ? <span className="form-help font-mono">{selectedFileName}</span>
-                  : <span className="form-help">or drop one here</span>}
+                  : <span className="form-help">或拖曳檔案到這裡</span>}
               </div>
             </div>
           </div>
@@ -95,37 +100,37 @@ export default function FirmwareUpload() {
               in `POST /api/check`, so a fixed list here is a second source of
               truth that silently blocks any board not on it. */}
           <div className="form-group">
-            <label className="form-label" htmlFor="firmware-model">Device model</label>
-            <input id="firmware-model" type="text" className="form-input" name="model" placeholder="ESP32-S3-DevKit" required />
-            <span className="form-help">Must match FIRMWARE_MODEL in the sketch, exactly.</span>
+            <label className="form-label" htmlFor="firmware-model">裝置型號</label>
+            <input id="firmware-model" type="text" className="form-input" name="model" placeholder="ESP32" required />
+            <span className="form-help">必須與 sketch 裡的 DEVICE_MODEL 完全一致。</span>
           </div>
 
           <div className="form-group">
-            <label className="form-label" htmlFor="firmware-version">Version</label>
+            <label className="form-label" htmlFor="firmware-version">版本</label>
             <input id="firmware-version" type="text" className="form-input" name="version" placeholder="2.4.2" required />
-            <span className="form-help">Three numeric segments: major.minor.patch</span>
+            <span className="form-help">三段數字：主版本.次版本.修訂號</span>
           </div>
 
           <div className="form-group">
-            <label className="form-label" htmlFor="firmware-notes">Release notes</label>
+            <label className="form-label" htmlFor="firmware-notes">版本說明</label>
             <textarea
               id="firmware-notes"
               name="notes"
               className="form-input"
               rows={4}
-              placeholder="What changed in this version?"
+              placeholder="這個版本改了什麼？"
               style={{ resize: 'vertical' }}
             />
           </div>
 
-          {message && (
-            <div className={`alert ${message.includes('success') ? 'alert-info' : 'alert-error'}`}>
-              {message}
+          {notice && (
+            <div className={`alert ${notice.ok ? 'alert-info' : 'alert-error'}`}>
+              {notice.text}
             </div>
           )}
 
           <button type="submit" className="btn btn-primary" style={{ width: '100%', marginTop: '0.9rem', padding: '0.82rem' }} disabled={submitting}>
-            {submitting ? 'Uploading...' : 'Upload and publish'}
+            {submitting ? '上傳中...' : '上傳並發布'}
           </button>
         </form>
       </div>
