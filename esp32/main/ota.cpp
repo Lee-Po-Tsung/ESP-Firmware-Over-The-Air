@@ -18,7 +18,7 @@
 #include <mbedtls/pk.h>
 #include <mbedtls/sha256.h>
 
-#define FIRMWARE_VERSION "1.0.0"
+#define FIRMWARE_VERSION "1.0.4"
 #define DEVICE_MODEL "ESP32"
 
 NetworkClientSecure* client = nullptr;
