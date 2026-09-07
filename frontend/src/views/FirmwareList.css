@@ -1,4 +1,8 @@
+/* Rows below are sized against this element, not the viewport: the list shares
+  the firmware screen with the upload form, so its width is roughly half of
+  what a media query would report. */
 .page-wrapper {
+  container-type: inline-size;
   width: 100%;
   box-sizing: border-box;
   flex: 1 1 0;
@@ -91,7 +95,7 @@
 
 .fw-history-row {
   display: grid;
-  grid-template-columns: 80px 1fr 300px;
+  grid-template-columns: 80px minmax(0, 1fr) 300px;
   gap: 1rem;
   align-items: center;
   padding: 1rem 1.5rem;
@@ -110,7 +114,7 @@
 }
 
 .fw-file-name {
-  word-break: break-all;
+  overflow-wrap: anywhere;
 }
 
 .fw-history-right {
@@ -182,7 +186,7 @@
   }
 }
 
-@media (max-width: 1024px) {
+@container (max-width: 640px) {
   .fw-group-header {
     flex-direction: column;
     align-items: flex-start;
@@ -193,9 +197,20 @@
     grid-template-columns: 60px 1fr 150px;
     gap: 0.75rem;
   }
+
+  /* The confirm panel is a paragraph and two buttons. It does not fit the
+    column the withdraw button sits in, so the row it opens in stacks. */
+  .fw-history-row:has(.fw-withdraw-confirm) {
+    grid-template-columns: 1fr;
+  }
+
+  .fw-history-row:has(.fw-withdraw-confirm) .fw-history-right {
+    align-items: flex-start;
+    text-align: left;
+  }
 }
 
-@media (max-width: 768px) {
+@container (max-width: 420px) {
   .fw-group-header {
     flex-direction: column;
     align-items: flex-start;
