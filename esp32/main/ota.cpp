@@ -18,7 +18,7 @@
 #include <mbedtls/pk.h>
 #include <mbedtls/sha256.h>
 
-#define FIRMWARE_VERSION "1.0.4"
+#define FIRMWARE_VERSION "1.0.0"
 #define DEVICE_MODEL "ESP32"
 
 NetworkClientSecure* client = nullptr;
@@ -40,6 +40,13 @@ String skipped_version;
 // RAM only, like skipped_version.
 String failed_version;
 int failed_attempts = 0;
+
+// Why the last attempt gave up, as a short stable token. Serial is the only
+// other place this is said, and nobody is watching a serial port in the field,
+// so it rides along with every check-in until a flash succeeds. A successful
+// flash reboots, which clears this along with the rest of the RAM state, and
+// that is exactly the moment it stops being true.
+String last_error;
 
 String rootCACertificate;
 String rsaPublicKey;
@@ -350,6 +357,7 @@ void noteUpdateFailed(const char* reason) {
         failed_attempts = 0;
     }
     failed_attempts++;
+    last_error = reason;
     Serial.printf("Update to %s failed: %s (%d attempt(s) so far).\n", version.c_str(), reason,
                   failed_attempts);
 }
@@ -378,6 +386,10 @@ bool check() {
     req["poll_interval_seconds"] = POLL_INTERVAL_SECONDS;
     req["rssi"] = WiFi.RSSI();
     req["ip"] = WiFi.localIP().toString();
+    if (!last_error.isEmpty()) {
+        req["last_error"] = last_error;
+        req["failed_attempts"] = failed_attempts;
+    }
     String data;
     serializeJson(req, data);
     Serial.println("Check request: " + data);
