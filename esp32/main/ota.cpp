@@ -458,7 +458,13 @@ bool downloadFirmwareToFS() {
     file.close();
     https.end();
     if (written < 0) {
+        // Covers a truncated body too: writeToStream compares Content-Length
+        // against what it copied and fails rather than returning a short
+        // count, so there is no partial success to test for here. The bytes
+        // it did write are dropped, since a partial image is worth nothing
+        // and this partition only holds one.
         Serial.printf("Firmware download failed: writeToStream error %d\n", written);
+        LittleFS.remove("/firmware.bin");
         delClient();
         return false;
     }
