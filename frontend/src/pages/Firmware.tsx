@@ -83,6 +83,7 @@ export default function Firmware() {
     }, []);
 
     const withdrawnCount = firmwares.filter(fw => !fw.active).length;
+    const canUpload = session?.role === 'admin';
 
     return (
         <div className="firmware-page">
@@ -100,8 +101,11 @@ export default function Firmware() {
                     )}
                 </div>
             </div>
-            <div className="firmware-manage-card">
-                <FirmwareUpload />
+            <div className={canUpload ? 'firmware-manage-card' : 'firmware-manage-card is-list-only'}>
+                {/* Absent rather than disabled, matching the withdraw action:
+                    `/firmware/upload` is admin-gated, so an operator would fill
+                    the form in and collect a 403 at the end of the upload. */}
+                {canUpload && <FirmwareUpload />}
                 <FirmwareList groupedFirmwares={groupedFirmwares} onWithdrawn={handleWithdrawn} />
             </div>
         </div>
