@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../auth/context';
-import { pickLatestActive } from '../version';
+import { compareVersions, pickLatestActive } from '../version';
 import './DeviceList.css';
 
 interface ApiDevice {
@@ -9,8 +9,13 @@ interface ApiDevice {
   model: string;
   current_version: string | null;
   last_seen: string | null;
+  ip: string | null;
   last_error: string | null;
   failed_attempts: number | null;
+  // `null` is unknown, not offline: the server answers this from the poll
+  // interval the device itself reports, and a device that has never checked in
+  // has not told it one. No threshold belongs on this side.
+  online: boolean | null;
 }
 
 // The device sends a short stable token, not a sentence, so rewording here
@@ -32,6 +37,11 @@ function errorLabel(token: string): string {
   return ERROR_LABELS[token] ?? token;
 }
 
+function statusDot(online: boolean | null): string {
+  if (online === null) return 'dot-amber';
+  return online ? 'dot-green' : 'dot-red';
+}
+
 interface Firmware {
   id: number;
   model: string;
@@ -51,13 +61,6 @@ function timeAgo(iso: string | null): string {
   return `${Math.floor(hours / 24)} 天前`;
 }
 
-function getStatus(iso: string | null): 'online' | 'offline' {
-  if (!iso) return 'offline';
-  const seconds = (Date.now() - new Date(iso).getTime()) / 1000;
-  return seconds <= 60 ? 'online' : 'offline';
-}
-
-
 
 export default function DeviceList() {
   const { session } = useAuth();
@@ -65,7 +68,7 @@ export default function DeviceList() {
   const [firmwares, setFirmwares] = useState<Firmware[]>([]);
   const [error, setError] = useState<string | null>(null);
 
-  const [time, setTime] = useState(new Date().toLocaleTimeString('zh-TW', { hour12: false }));
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedModel, setSelectedModel] = useState('全部型號');
@@ -87,6 +90,7 @@ export default function DeviceList() {
         .then(([devs, fws]) => {
           setApiDevices(devs);
           setFirmwares(fws);
+          setLastUpdated(new Date());
           setError(null);
         })
         .catch(e => setError(e instanceof Error ? e.message : String(e)));
@@ -96,13 +100,6 @@ export default function DeviceList() {
     const interval = setInterval(fetchData, 15000);
     return () => clearInterval(interval);
   }, [session]);
-
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setTime(new Date().toLocaleTimeString('zh-TW', { hour12: false }));
-    }, 1000);
-    return () => clearInterval(timer);
-  }, []);
 
   // What the server would answer this model's devices, not what was uploaded
   // last. Withdrawn rows are excluded and versions compare as tuples, so a
@@ -123,42 +120,49 @@ export default function DeviceList() {
 
   const devices = apiDevices.map(d => {
     const latestFw = latestFirmwares[d.model];
-    const is_latest = (latestFw && d.current_version) ? (d.current_version === latestFw.version) : true;
+    // Compared as tuples, the way the server decides what to offer. String
+    // equality reads 1.2.10 as behind 1.2.9 and puts a healthy device in the
+    // banner. A version with nothing published to compare against is not behind.
+    const is_latest =
+      latestFw && d.current_version ? compareVersions(d.current_version, latestFw.version) >= 0 : true;
 
     return {
       id: d.device_id,
       model: d.model,
-      current_version: d.current_version || '未知',
+      ip: d.ip,
+      current_version: d.current_version,
       is_latest,
       last_seen: timeAgo(d.last_seen),
       last_error: d.last_error,
       failed_attempts: d.failed_attempts,
-      status: getStatus(d.last_seen) as 'online' | 'offline' | 'updating'
+      online: d.online,
     };
   });
 
-  const onlineCount = devices.filter(d => d.status === 'online').length;
-  const offlineCount = devices.filter(d => d.status === 'offline').length;
+  const onlineCount = devices.filter(d => d.online === true).length;
+  const offlineCount = devices.filter(d => d.online === false).length;
+  const unknownCount = devices.filter(d => d.online === null).length;
   const outdatedDevices = devices.filter(d => !d.is_latest);
   const failedDevices = devices.filter(d => d.last_error);
-  const uniqueModels = Array.from(new Set([
-    'ESP32-S3-DevKit',
-    'ESP32-S3-Mini',
-    'ESP8266-12F',
-    ...devices.map(d => d.model)
-  ]));
+  // Built from the devices that checked in, not from the firmware list. A model
+  // with nothing published still gets its check-ins recorded, and filtering
+  // those devices out of the view would hide the ones most worth noticing.
+  const uniqueModels = Array.from(new Set(devices.map(d => d.model))).sort();
 
   const filteredDevices = devices.filter(d => {
     const searchLower = searchQuery.toLowerCase();
     const matchesSearch = !searchQuery ||
       d.id.toLowerCase().includes(searchLower) ||
-      d.model.toLowerCase().includes(searchLower);
+      d.model.toLowerCase().includes(searchLower) ||
+      (d.ip?.toLowerCase().includes(searchLower) ?? false);
 
     const matchesModel = selectedModel === '全部型號' || d.model === selectedModel;
 
+    // A device whose state is unknown matches neither filter, which is the
+    // point: it is not being claimed as either.
     let matchesStatus = true;
-    if (selectedStatus === '在線') matchesStatus = d.status === 'online';
-    if (selectedStatus === '離線') matchesStatus = d.status === 'offline';
+    if (selectedStatus === '在線') matchesStatus = d.online === true;
+    if (selectedStatus === '離線') matchesStatus = d.online === false;
 
     return matchesSearch && matchesModel && matchesStatus;
   });
@@ -171,7 +175,7 @@ export default function DeviceList() {
         </div>
         <div className="dev-live-indicator font-mono text-xs text-secondary">
           <span className="live-dot"></span>
-          即時 · {time}
+          每 15 秒更新{lastUpdated && ` · 最後更新 ${lastUpdated.toLocaleTimeString('zh-TW', { hour12: false })}`}
         </div>
       </div>
 
@@ -191,7 +195,9 @@ export default function DeviceList() {
         <div className="card dev-card">
           <div className="dev-card-title text-xs text-secondary font-medium">離線</div>
           <div className="dev-card-value text-3xl font-medium font-mono text-error">{offlineCount}</div>
-          <div className="dev-card-desc text-xs text-tertiary">超過 60 秒未回報</div>
+          <div className="dev-card-desc text-xs text-tertiary">
+            超過自報的回報間隔{unknownCount > 0 && ` · ${unknownCount} 台狀態未知`}
+          </div>
         </div>
         <div className="card dev-card">
           <div className="dev-card-title text-xs text-secondary font-medium">更新失敗</div>
@@ -230,7 +236,7 @@ export default function DeviceList() {
             <input
               type="text"
               className="form-input"
-              placeholder="搜尋名稱或型號"
+              placeholder="搜尋裝置 ID、型號或 IP"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />
@@ -280,19 +286,30 @@ export default function DeviceList() {
               </tr>
             </thead>
             <tbody>
+              {filteredDevices.length === 0 && (
+                <tr>
+                  <td colSpan={4} className="dev-empty-state text-sm text-secondary">
+                    {devices.length === 0
+                      ? '還沒有裝置回報過。裝置第一次成功呼叫 /api/check 之後就會出現在這裡。'
+                      : '沒有符合條件的裝置。'}
+                  </td>
+                </tr>
+              )}
               {filteredDevices.map(d => (
                 <tr key={d.id}>
                   <td className="dev-col-device">
                     <div className="dev-device-info">
-                      <span className={`dev-status-dot ${d.status === 'online' ? 'dot-green' : 'dot-red'}`}></span>
+                      <span className={`dev-status-dot ${statusDot(d.online)}`}></span>
                       <div className="dev-device-text">
                         <div className="dev-device-name font-mono text-sm font-semibold text-primary">{d.id}</div>
-                        <div className="dev-device-meta font-mono text-xs text-tertiary">{d.model}</div>
+                        <div className="dev-device-meta font-mono text-xs text-tertiary">
+                          {d.ip ? `${d.model} · ${d.ip}` : d.model}
+                        </div>
                       </div>
                     </div>
                   </td>
                   <td className="dev-col-fw">
-                    <span className="dev-fw-text font-mono text-sm text-primary">{d.current_version}</span>
+                    <span className="dev-fw-text font-mono text-sm text-primary">{d.current_version ?? '未知'}</span>
                     {d.last_error && (
                       <div className="dev-fw-error text-xs">
                         {errorLabel(d.last_error)}
@@ -304,11 +321,9 @@ export default function DeviceList() {
                     {d.last_seen}
                   </td>
                   <td className="dev-col-status">
-                    {d.status === 'online' ? (
-                      <span className="badge badge-success">在線</span>
-                    ) : (
-                      <span className="badge badge-error">離線</span>
-                    )}
+                    {d.online === true && <span className="badge badge-success">在線</span>}
+                    {d.online === false && <span className="badge badge-error">離線</span>}
+                    {d.online === null && <span className="badge badge-warning">未知</span>}
                   </td>
                 </tr>
               ))}
