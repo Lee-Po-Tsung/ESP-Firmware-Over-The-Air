@@ -67,6 +67,8 @@ from domain.signing import parse_version  # noqa: E402
 from ports.repository import (  # noqa: E402
     DeviceEventRepository,
     DeviceRepository,
+    FirmwareAlreadyExists,
+    FirmwareBinaryAlreadyExists,
     FirmwareRepository,
     UserAlreadyExists,
     UserRepository,
@@ -87,6 +89,15 @@ class FakeFirmwareRepository(FirmwareRepository):
         self.added: list[Firmware] = []
 
     def add(self, firmware: Firmware) -> Firmware:
+        # Both rejections the port promises. Subclassing catches a method added
+        # to a port, not behaviour added to one, so a fake that accepts what the
+        # real repository refuses would leave every caller-side test passing on
+        # a contract nothing upholds.
+        duplicate = self.get_by_sha256(firmware.model, firmware.sha256)
+        if duplicate is not None:
+            raise FirmwareBinaryAlreadyExists(firmware.model, duplicate.version)
+        if any(f.model == firmware.model and f.version == firmware.version for f in self.rows):
+            raise FirmwareAlreadyExists(firmware.model, firmware.version)
         firmware.id = len(self.rows) + 1
         self.rows.append(firmware)
         self.added.append(firmware)

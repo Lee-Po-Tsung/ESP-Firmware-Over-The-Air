@@ -14,6 +14,7 @@ from ports.repository import (
     DeviceEventRepository,
     DeviceRepository,
     FirmwareAlreadyExists,
+    FirmwareBinaryAlreadyExists,
     FirmwareRepository,
     UserAlreadyExists,
     UserRepository,
@@ -137,9 +138,37 @@ class SqliteFirmwareRepository(FirmwareRepository):
             self._session.commit()
         except IntegrityError as exc:
             self._session.rollback()
-            raise FirmwareAlreadyExists(firmware.model, firmware.version) from exc
+            conflict = self._conflict(firmware)
+            if conflict is None:
+                raise
+            raise conflict from exc
         self._session.refresh(row)
         return _to_firmware(row)
+
+    def _conflict(self, firmware: Firmware) -> Exception | None:
+        """Name which uniqueness a rejected insert violated, or None if neither.
+
+        Decided by re-reading rather than by parsing the driver's message, which
+        names columns on SQLite and constraint names elsewhere. The sha256 axis is
+        checked first so that one input gets one answer: an upload of bytes that
+        are already stored is reported the same way whether the use case's
+        pre-check caught it or the index did.
+
+        None means the row was rejected for something this does not know about,
+        and the caller re-raises the original error rather than mislabelling it.
+        """
+        duplicate = self.get_by_sha256(firmware.model, firmware.sha256)
+        if duplicate is not None:
+            return FirmwareBinaryAlreadyExists(firmware.model, duplicate.version)
+        existing = self._session.scalar(
+            select(FirmwareRow).where(
+                FirmwareRow.model == firmware.model,
+                FirmwareRow.version == firmware.version,
+            )
+        )
+        if existing is not None:
+            return FirmwareAlreadyExists(firmware.model, firmware.version)
+        return None
 
     def get_by_id(self, firmware_id: int) -> Firmware | None:
         row = self._session.get(FirmwareRow, firmware_id)

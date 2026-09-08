@@ -27,8 +27,13 @@ def _utcnow() -> datetime:
 class FirmwareRow(Base):
     __tablename__ = "firmware"
 
-    # `model|version` should all be unique index.
-    __table_args__ = (Index("uq_firmware_model_version", "model", "version", unique=True),)
+    # Both identity axes are enforced here, not just in the use case: the
+    # sha256 check there reads before it writes, so two concurrent uploads of
+    # one binary both see nothing and both proceed.
+    __table_args__ = (
+        Index("uq_firmware_model_version", "model", "version", unique=True),
+        Index("uq_firmware_model_sha256", "model", "sha256", unique=True),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     model: Mapped[str] = mapped_column(String, nullable=False, index=True)

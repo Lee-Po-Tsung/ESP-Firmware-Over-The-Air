@@ -58,7 +58,11 @@ class FirmwareRepository(ABC):
     def add(self, firmware: Firmware) -> Firmware:
         """Persist a new firmware row and return it with its assigned id.
 
-        Raises `FirmwareAlreadyExists` if that (model, version) is already stored.
+        Both identity axes are enforced here rather than by the caller, since a
+        caller can only read before it writes. Raises `FirmwareAlreadyExists` if
+        that (model, version) is already stored, and `FirmwareBinaryAlreadyExists`
+        if those bytes are already stored for the model, the latter taking
+        precedence when an insert collides on both.
         """
 
     @abstractmethod
