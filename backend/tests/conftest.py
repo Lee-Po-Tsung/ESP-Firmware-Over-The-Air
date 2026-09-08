@@ -62,9 +62,10 @@ _seed_signing_key()
 # lines above have run.
 from collections.abc import Iterable  # noqa: E402
 
-from domain.models import Device, Firmware, User  # noqa: E402
+from domain.models import Device, DeviceEvent, EventType, Firmware, User  # noqa: E402
 from domain.signing import parse_version  # noqa: E402
 from ports.repository import (  # noqa: E402
+    DeviceEventRepository,
     DeviceRepository,
     FirmwareRepository,
     UserAlreadyExists,
@@ -130,6 +131,30 @@ class FakeDeviceRepository(DeviceRepository):
 
     def list_all(self) -> list[Device]:
         return list(self.devices.values())
+
+
+class FakeDeviceEventRepository(DeviceEventRepository):
+    def __init__(self) -> None:
+        self.events: list[DeviceEvent] = []
+
+    def add(self, event: DeviceEvent) -> DeviceEvent:
+        event.id = len(self.events) + 1
+        self.events.append(event)
+        return event
+
+    def list_for_device(self, device_id: str, limit: int = 100) -> list[DeviceEvent]:
+        matching = [e for e in self.events if e.device_id == device_id]
+        return list(reversed(matching))[:limit]
+
+    def latest_for_device(self, device_id: str, event_type: EventType) -> DeviceEvent | None:
+        matching = [
+            e for e in self.events if e.device_id == device_id and e.event_type == event_type
+        ]
+        return matching[-1] if matching else None
+
+    def types(self) -> list[EventType]:
+        """Every event type recorded, in order. What most tests actually assert."""
+        return [e.event_type for e in self.events]
 
 
 class FakeUserRepository(UserRepository):

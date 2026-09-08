@@ -8,9 +8,10 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from domain.models import Device, Firmware, Role, User
+from domain.models import Device, DeviceEvent, EventType, Firmware, Role, User
 from domain.signing import parse_version
 from ports.repository import (
+    DeviceEventRepository,
     DeviceRepository,
     FirmwareAlreadyExists,
     FirmwareRepository,
@@ -21,7 +22,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from infrastructure.db import DeviceRow, FirmwareRow, UserRow
+from infrastructure.db import DeviceEventRow, DeviceRow, FirmwareRow, UserRow
 
 
 def _utc(value: datetime | None) -> datetime | None:
@@ -48,6 +49,17 @@ def _to_firmware(row: FirmwareRow) -> Firmware:
         size_bytes=row.size_bytes,
         notes=row.notes,
         active=row.active,
+        created_at=_utc(row.created_at),
+    )
+
+
+def _to_event(row: DeviceEventRow) -> DeviceEvent:
+    return DeviceEvent(
+        id=row.id,
+        device_id=row.device_id,
+        event_type=EventType(row.event_type),
+        from_version=row.from_version,
+        to_version=row.to_version,
         created_at=_utc(row.created_at),
     )
 
@@ -223,3 +235,44 @@ class SqliteDeviceRepository(DeviceRepository):
             select(DeviceRow).order_by(DeviceRow.last_seen.desc(), DeviceRow.id.desc())
         ).all()
         return [_to_device(r) for r in rows]
+
+
+class SqliteDeviceEventRepository(DeviceEventRepository):
+    def __init__(self, session: Session) -> None:
+        self._session = session
+
+    def add(self, event: DeviceEvent) -> DeviceEvent:
+        row = DeviceEventRow(
+            device_id=event.device_id,
+            event_type=event.event_type.value,
+            from_version=event.from_version,
+            to_version=event.to_version,
+        )
+        self._session.add(row)
+        self._session.commit()
+        self._session.refresh(row)
+        return _to_event(row)
+
+    def list_for_device(self, device_id: str, limit: int = 100) -> list[DeviceEvent]:
+        # Ordered by id, not `created_at`: two events from one check-in share a
+        # timestamp to the resolution SQLite stores, and insertion order is the
+        # only thing that puts them back in the order they happened.
+        rows = self._session.scalars(
+            select(DeviceEventRow)
+            .where(DeviceEventRow.device_id == device_id)
+            .order_by(DeviceEventRow.id.desc())
+            .limit(limit)
+        ).all()
+        return [_to_event(r) for r in rows]
+
+    def latest_for_device(self, device_id: str, event_type: EventType) -> DeviceEvent | None:
+        row = self._session.scalar(
+            select(DeviceEventRow)
+            .where(
+                DeviceEventRow.device_id == device_id,
+                DeviceEventRow.event_type == event_type.value,
+            )
+            .order_by(DeviceEventRow.id.desc())
+            .limit(1)
+        )
+        return _to_event(row) if row else None

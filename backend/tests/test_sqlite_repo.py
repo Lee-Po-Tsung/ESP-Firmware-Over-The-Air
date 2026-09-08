@@ -3,9 +3,10 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 import pytest
-from domain.models import Device, Firmware, Role, User
+from domain.models import Device, DeviceEvent, EventType, Firmware, Role, User
 from infrastructure.db import Base
 from infrastructure.sqlite_repo import (
+    SqliteDeviceEventRepository,
     SqliteDeviceRepository,
     SqliteFirmwareRepository,
     SqliteUserRepository,
@@ -319,3 +320,64 @@ def test_every_repository_hands_back_aware_timestamps(session):
     assert firmware.created_at.tzinfo is not None
     assert user.created_at.tzinfo is not None
     assert device.last_seen == datetime(2026, 7, 15, 12, 0, 0, tzinfo=timezone.utc)
+
+
+def make_event(device_id="dev-1", event_type=EventType.CHECK, **overrides) -> DeviceEvent:
+    return DeviceEvent(device_id=device_id, event_type=event_type, **overrides)
+
+
+def test_event_repo_stamps_utc_on_append(session):
+    repo = SqliteDeviceEventRepository(session)
+
+    event = repo.add(make_event(from_version="1.0.0", to_version="1.1.0"))
+
+    assert event.id is not None
+    assert event.created_at.tzinfo is timezone.utc
+    assert event.event_type is EventType.CHECK
+
+
+def test_event_repo_returns_one_device_history_newest_first(session):
+    repo = SqliteDeviceEventRepository(session)
+    repo.add(make_event(event_type=EventType.CHECK))
+    repo.add(make_event(event_type=EventType.DOWNLOAD))
+    repo.add(make_event(event_type=EventType.SUCCESS))
+    repo.add(make_event(device_id="other", event_type=EventType.CHECK))
+
+    history = repo.list_for_device("dev-1")
+
+    # Ordered by id: events from one check-in share a timestamp at the
+    # resolution SQLite keeps, so insertion order is the only thing that
+    # separates them.
+    assert [e.event_type for e in history] == [
+        EventType.SUCCESS,
+        EventType.DOWNLOAD,
+        EventType.CHECK,
+    ]
+
+
+def test_event_repo_finds_the_latest_of_one_type(session):
+    repo = SqliteDeviceEventRepository(session)
+    repo.add(make_event(event_type=EventType.DOWNLOAD, to_version="1.0.0"))
+    repo.add(make_event(event_type=EventType.SUCCESS, to_version="1.0.0"))
+    repo.add(make_event(event_type=EventType.DOWNLOAD, to_version="1.2.0"))
+
+    latest = repo.latest_for_device("dev-1", EventType.DOWNLOAD)
+
+    assert latest.to_version == "1.2.0"
+
+
+def test_event_repo_answers_none_for_a_device_with_no_such_event(session):
+    repo = SqliteDeviceEventRepository(session)
+    repo.add(make_event(event_type=EventType.CHECK))
+
+    assert repo.latest_for_device("dev-1", EventType.ROLLBACK) is None
+    assert repo.list_for_device("never-seen") == []
+
+
+def test_event_repo_accepts_an_unattributed_download(session):
+    """A cached or hand-typed download URL carries no device id."""
+    repo = SqliteDeviceEventRepository(session)
+
+    event = repo.add(make_event(device_id=None, event_type=EventType.DOWNLOAD))
+
+    assert event.device_id is None

@@ -26,11 +26,12 @@ from application.upload_firmware import UploadFirmware, UploadFirmwareRequest
 from domain import fleet
 from domain.auth import InvalidCredentialFormat
 from domain.firmware_image import InvalidFirmwareImage
-from domain.models import Role
+from domain.models import DeviceEvent, EventType, Role
 from domain.signing import InvalidManifestField
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from fastapi.responses import Response
 from ports.repository import (
+    DeviceEventRepository,
     DeviceRepository,
     FirmwareAlreadyExists,
     FirmwareBinaryAlreadyExists,
@@ -46,6 +47,7 @@ from api.deps import (
     get_check_update,
     get_current_user,
     get_deactivate_firmware,
+    get_device_event_repository,
     get_device_repository,
     get_device_stats,
     get_firmware_repository,
@@ -216,14 +218,26 @@ def _content_disposition(filename: str) -> str:
 @router.get("/api/download/{firmware_id}")
 def download_firmware(
     firmware_id: int,
+    device_id: str | None = None,
     repo: FirmwareRepository = Depends(get_firmware_repository),
     storage: StorageBackend = Depends(get_storage),
+    events: DeviceEventRepository = Depends(get_device_event_repository),
 ) -> Response:
     firmware = repo.get_by_id(firmware_id)
     if firmware is None or not storage.exists(firmware.filename):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
 
     data = storage.get(firmware.filename)
+    # `device_id` comes from the query string `/api/check` put on the URL it
+    # handed out. A cached or hand-typed URL carries none, which records an
+    # unattributed download rather than nothing at all.
+    events.add(
+        DeviceEvent(
+            device_id=device_id,
+            event_type=EventType.DOWNLOAD,
+            to_version=firmware.version,
+        )
+    )
     # The stored name is a hash. Offer a browser the name it was uploaded under;
     # the device ignores the header and reads the stream.
     download_name = firmware.original_filename or firmware.filename

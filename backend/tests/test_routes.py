@@ -11,6 +11,7 @@ import pytest
 from api.deps import (
     get_check_update,
     get_current_user,
+    get_device_event_repository,
     get_device_repository,
     get_device_stats,
     get_firmware_repository,
@@ -18,8 +19,13 @@ from api.deps import (
 )
 from application.check_update import CheckUpdate
 from application.device_stats import DeviceStats
-from conftest import FakeDeviceRepository, FakeFirmwareRepository, FakeStorage
-from domain.models import Device, Firmware, Role, User
+from conftest import (
+    FakeDeviceEventRepository,
+    FakeDeviceRepository,
+    FakeFirmwareRepository,
+    FakeStorage,
+)
+from domain.models import Device, EventType, Firmware, Role, User
 from fastapi.testclient import TestClient
 from main import app
 
@@ -71,7 +77,7 @@ def client():
 
 def test_check_update_returns_403_for_unknown_model(client):
     app.dependency_overrides[get_check_update] = lambda: CheckUpdate(
-        FakeFirmwareRepository(), FakeDeviceRepository()
+        FakeFirmwareRepository(), FakeDeviceRepository(), FakeDeviceEventRepository()
     )
 
     response = client.post("/api/check", json=check_payload())
@@ -82,7 +88,7 @@ def test_check_update_returns_403_for_unknown_model(client):
 def test_check_update_reports_no_update_when_current_is_latest(client):
     latest = make_firmware(version="1.0.0")
     app.dependency_overrides[get_check_update] = lambda: CheckUpdate(
-        FakeFirmwareRepository([latest]), FakeDeviceRepository()
+        FakeFirmwareRepository([latest]), FakeDeviceRepository(), FakeDeviceEventRepository()
     )
 
     response = client.post("/api/check", json=check_payload())
@@ -94,7 +100,7 @@ def test_check_update_reports_no_update_when_current_is_latest(client):
 def test_check_update_reports_available_update_with_download_url(client):
     latest = make_firmware(version="1.2.0", firmware_id=42)
     app.dependency_overrides[get_check_update] = lambda: CheckUpdate(
-        FakeFirmwareRepository([latest]), FakeDeviceRepository()
+        FakeFirmwareRepository([latest]), FakeDeviceRepository(), FakeDeviceEventRepository()
     )
 
     response = client.post("/api/check", json=check_payload(version="1.1.0", device_id="dev-1"))
@@ -105,7 +111,9 @@ def test_check_update_reports_available_update_with_download_url(client):
         "update_available": True,
         "version": "1.2.0",
         "signature": "c2ln",
-        "download_url": "/api/download/42",
+        # The reported id rides back on the URL the device follows verbatim,
+        # which is what lets a download be attributed with no device change.
+        "download_url": "/api/download/42?device_id=dev-1",
     }
 
 
@@ -117,7 +125,7 @@ def test_check_response_carries_only_what_the_device_reads(client):
     """
     latest = make_firmware(version="1.2.0", firmware_id=42)
     app.dependency_overrides[get_check_update] = lambda: CheckUpdate(
-        FakeFirmwareRepository([latest]), FakeDeviceRepository()
+        FakeFirmwareRepository([latest]), FakeDeviceRepository(), FakeDeviceEventRepository()
     )
 
     body = client.post("/api/check", json=check_payload(version="1.1.0")).json()
@@ -129,7 +137,7 @@ def test_check_update_records_device_checkin(client):
     latest = make_firmware(version="1.2.0", firmware_id=42)
     devices = FakeDeviceRepository()
     app.dependency_overrides[get_check_update] = lambda: CheckUpdate(
-        FakeFirmwareRepository([latest]), devices
+        FakeFirmwareRepository([latest]), devices, FakeDeviceEventRepository()
     )
 
     client.post("/api/check", json=check_payload(version="1.1.0", device_id="dev-1"))
@@ -141,7 +149,7 @@ def test_check_update_records_a_reported_update_failure(client):
     latest = make_firmware(version="1.2.0", firmware_id=42)
     devices = FakeDeviceRepository()
     app.dependency_overrides[get_check_update] = lambda: CheckUpdate(
-        FakeFirmwareRepository([latest]), devices
+        FakeFirmwareRepository([latest]), devices, FakeDeviceEventRepository()
     )
 
     client.post(
@@ -162,7 +170,7 @@ def test_check_update_accepts_a_device_reporting_no_failure(client):
     latest = make_firmware(version="1.2.0", firmware_id=42)
     devices = FakeDeviceRepository()
     app.dependency_overrides[get_check_update] = lambda: CheckUpdate(
-        FakeFirmwareRepository([latest]), devices
+        FakeFirmwareRepository([latest]), devices, FakeDeviceEventRepository()
     )
 
     response = client.post("/api/check", json=check_payload(device_id="dev-1"))
@@ -180,7 +188,7 @@ def test_check_update_clears_a_failure_the_device_stopped_reporting(client):
     latest = make_firmware(version="1.2.0", firmware_id=42)
     devices = FakeDeviceRepository()
     app.dependency_overrides[get_check_update] = lambda: CheckUpdate(
-        FakeFirmwareRepository([latest]), devices
+        FakeFirmwareRepository([latest]), devices, FakeDeviceEventRepository()
     )
 
     client.post(
@@ -197,7 +205,7 @@ def test_check_update_rejects_an_oversized_error_token(client):
     """`/api/check` is unauthenticated, so the one free-text field is bounded."""
     latest = make_firmware(version="1.2.0", firmware_id=42)
     app.dependency_overrides[get_check_update] = lambda: CheckUpdate(
-        FakeFirmwareRepository([latest]), FakeDeviceRepository()
+        FakeFirmwareRepository([latest]), FakeDeviceRepository(), FakeDeviceEventRepository()
     )
 
     response = client.post(
@@ -211,6 +219,7 @@ def test_check_update_rejects_an_oversized_error_token(client):
 def test_download_firmware_returns_404_for_unknown_id(client):
     app.dependency_overrides[get_firmware_repository] = lambda: FakeFirmwareRepository()
     app.dependency_overrides[get_storage] = lambda: FakeStorage()
+    app.dependency_overrides[get_device_event_repository] = lambda: FakeDeviceEventRepository()
 
     response = client.get("/api/download/999")
 
@@ -221,6 +230,7 @@ def test_download_firmware_returns_404_when_file_missing_from_storage(client):
     firmware = make_firmware(firmware_id=1)
     app.dependency_overrides[get_firmware_repository] = lambda: FakeFirmwareRepository([firmware])
     app.dependency_overrides[get_storage] = lambda: FakeStorage()  # file was never stored
+    app.dependency_overrides[get_device_event_repository] = lambda: FakeDeviceEventRepository()
 
     response = client.get("/api/download/1")
 
@@ -233,6 +243,7 @@ def test_download_firmware_returns_binary_with_expected_headers(client):
     app.dependency_overrides[get_storage] = lambda: FakeStorage(
         {firmware.filename: b"binary contents"}
     )
+    app.dependency_overrides[get_device_event_repository] = lambda: FakeDeviceEventRepository()
 
     response = client.get("/api/download/1")
 
@@ -259,6 +270,7 @@ def test_download_firmware_survives_a_hostile_upload_name(client, original_filen
     app.dependency_overrides[get_storage] = lambda: FakeStorage(
         {firmware.filename: b"binary contents"}
     )
+    app.dependency_overrides[get_device_event_repository] = lambda: FakeDeviceEventRepository()
 
     response = client.get("/api/download/1")
 
@@ -486,3 +498,45 @@ def test_device_stats_requires_login(client):
     response = client.get("/api/devices/stats")
 
     assert response.status_code == 401
+
+
+def test_download_records_an_attributed_event(client):
+    firmware = make_firmware(firmware_id=1, version="1.2.0")
+    events = FakeDeviceEventRepository()
+    app.dependency_overrides[get_firmware_repository] = lambda: FakeFirmwareRepository([firmware])
+    app.dependency_overrides[get_storage] = lambda: FakeStorage(
+        {firmware.filename: b"binary contents"}
+    )
+    app.dependency_overrides[get_device_event_repository] = lambda: events
+
+    client.get("/api/download/1?device_id=aa:bb:cc")
+
+    assert events.types() == [EventType.DOWNLOAD]
+    assert (events.events[0].device_id, events.events[0].to_version) == ("aa:bb:cc", "1.2.0")
+
+
+def test_a_download_without_a_device_id_still_records(client):
+    """A cached or hand-typed URL carries none. The column is nullable so the
+    binary still leaves a trace of having been served."""
+    firmware = make_firmware(firmware_id=1)
+    events = FakeDeviceEventRepository()
+    app.dependency_overrides[get_firmware_repository] = lambda: FakeFirmwareRepository([firmware])
+    app.dependency_overrides[get_storage] = lambda: FakeStorage(
+        {firmware.filename: b"binary contents"}
+    )
+    app.dependency_overrides[get_device_event_repository] = lambda: events
+
+    client.get("/api/download/1")
+
+    assert events.types() == [EventType.DOWNLOAD]
+    assert events.events[0].device_id is None
+
+
+def test_a_download_that_404s_records_nothing(client):
+    events = FakeDeviceEventRepository()
+    app.dependency_overrides[get_firmware_repository] = lambda: FakeFirmwareRepository()
+    app.dependency_overrides[get_storage] = lambda: FakeStorage()
+    app.dependency_overrides[get_device_event_repository] = lambda: events
+
+    assert client.get("/api/download/999").status_code == 404
+    assert events.types() == []
