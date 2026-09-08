@@ -17,6 +17,7 @@ from api.deps import (
     get_user_repository,
 )
 from application.auth import AuthenticateUser
+from application.upload_firmware import InvalidUploadIdentity
 from config import get_settings
 from conftest import FakeFirmwareRepository, FakeUserRepository
 from domain import auth
@@ -49,9 +50,12 @@ def make_firmware(firmware_id=1) -> Firmware:
 
 class FakeUploadFirmware:
     def execute(self, req) -> Firmware:
+        # The real use case reads these out of the image whenever the form
+        # leaves them out, so stand in for that rather than handing None back
+        # to a response model that promises strings.
         return Firmware(
-            model=req.model,
-            version=req.version,
+            model=req.model or "ESP32",
+            version=req.version or "1.0.0",
             filename="f.bin",
             signature="s",
             sha256="a" * 64,
@@ -86,6 +90,11 @@ class FakeUploadFirmwareStoredBinary:
 class FakeUploadFirmwareBadVersion:
     def execute(self, req) -> Firmware:
         raise InvalidManifestField("version must look like 1.2.3, got 'v2.0.0'")
+
+
+class FakeUploadFirmwareContradicted:
+    def execute(self, req) -> Firmware:
+        raise InvalidUploadIdentity("Image says ESP32 1.0.5, upload says ESP32 1.0.4")
 
 
 @pytest.fixture
@@ -214,7 +223,9 @@ def test_upload_succeeds_for_admin(users, client):
     )
 
     assert res.status_code == 200
-    assert res.json() == {"status": "ok"}
+    # The identity rides back on the response because the uploader need not have
+    # typed it: an image carrying a build marker names itself.
+    assert res.json() == {"status": "ok", "model": "ESP32", "version": "1.0.0"}
 
 
 def test_upload_carries_notes_through_to_the_use_case(users, client):
@@ -277,6 +288,39 @@ def test_upload_rejects_a_file_that_is_not_an_esp32_image(users, client):
     assert res.status_code == 400
     # The route must pass the validator's message through, not flatten it.
     assert "0xE9" in res.json()["detail"]
+
+
+def test_upload_reports_a_label_the_image_contradicts(users, client):
+    """Both values reach the admin, since only they can tell which one is wrong."""
+    seed_user(users, "admin", "pw", Role.ADMIN)
+    app.dependency_overrides[get_upload_firmware] = lambda: FakeUploadFirmwareContradicted()
+    token = login(client, "admin", "pw")
+
+    res = client.post(
+        "/firmware/upload", files=upload_files(), headers={"Authorization": f"Bearer {token}"}
+    )
+
+    assert res.status_code == 400
+    assert "1.0.5" in res.json()["detail"]
+    assert "1.0.4" in res.json()["detail"]
+
+
+def test_upload_without_a_typed_model_or_version_is_accepted(users, client):
+    """The normal path once an image names itself: the form sends neither field."""
+    seed_user(users, "admin", "pw", Role.ADMIN)
+    recorder = RecordingUploadFirmware()
+    app.dependency_overrides[get_upload_firmware] = lambda: recorder
+    token = login(client, "admin", "pw")
+
+    res = client.post(
+        "/firmware/upload",
+        files={"firmware": ("f.bin", io.BytesIO(b"binary"), "application/octet-stream")},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert res.status_code == 200
+    assert recorder.req.model is None
+    assert recorder.req.version is None
 
 
 def test_upload_rejects_a_version_the_manifest_cannot_carry(users, client):

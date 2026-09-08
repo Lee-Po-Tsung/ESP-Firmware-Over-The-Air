@@ -12,7 +12,9 @@ nothing about who produced an image; that is the signature's job.
 from __future__ import annotations
 
 import hashlib
+import re
 import struct
+from dataclasses import dataclass
 
 # Image layout, little-endian throughout, from `esp_app_format.h` in the ESP32
 # Arduino core:
@@ -58,8 +60,50 @@ KNOWN_CHIP_IDS = frozenset(
 MIN_FIRMWARE_BYTES = 1024
 
 
+# The marker `esp32/main/ota.cpp` builds out of its own FIRMWARE_VERSION and
+# DEVICE_MODEL, and prints at boot so the linker keeps it. Both values are in
+# the binary as plain strings without it, but so is the Arduino core's own
+# version, and nothing tells them apart. This is what makes them findable.
+BUILD_TAG_PATTERN = re.compile(rb"ESPOTA-BUILD\{model=([^;}]{1,64});version=([^;}]{1,32})\}")
+
+
 class InvalidFirmwareImage(Exception):
     """Raised when uploaded bytes are not a well-formed ESP32 application image."""
+
+
+@dataclass(frozen=True)
+class BuildTag:
+    model: str
+    version: str
+
+
+def read_build_tag(data: bytes) -> BuildTag | None:
+    """What the image says it is, or None if it carries no marker.
+
+    The image is the authority on this wherever it answers, since it is the
+    same string the device will report on its next check-in. A build without
+    the marker predates it or came from another toolchain, and the caller falls
+    back to what the uploader typed.
+
+    A second marker means the bytes are not what they claim: an application
+    image carries exactly one, so anything else is a concatenation or a
+    doctored file, and guessing which one is real is not this function's call.
+    """
+    matches = BUILD_TAG_PATTERN.findall(data)
+    if not matches:
+        return None
+    if len(matches) > 1:
+        raise InvalidFirmwareImage(
+            f"Image carries {len(matches)} build markers; exactly one is expected"
+        )
+
+    model, version = matches[0]
+    try:
+        return BuildTag(model.decode("ascii"), version.decode("ascii"))
+    except UnicodeDecodeError as exc:
+        # The device builds this string from C literals, so anything else came
+        # from a byte sequence that happens to look like the marker.
+        raise InvalidFirmwareImage("Image build marker is not ASCII") from exc
 
 
 def validate_image(data: bytes) -> None:

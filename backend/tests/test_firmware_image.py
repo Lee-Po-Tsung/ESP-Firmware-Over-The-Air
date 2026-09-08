@@ -14,6 +14,7 @@ from domain.firmware_image import (
     IMAGE_MAGIC,
     MIN_FIRMWARE_BYTES,
     InvalidFirmwareImage,
+    read_build_tag,
     validate_image,
 )
 
@@ -114,3 +115,54 @@ def test_validate_image_accepts_a_real_arduino_cli_build():
     # Guards the assumption the synthesized images above rest on: that this is
     # the layout arduino-cli actually emits.
     validate_image(REAL_IMAGE.read_bytes())
+
+
+def tagged(model: str = "ESP32", version: str = "1.0.4") -> bytes:
+    """The marker as `ota.cpp` builds it, buried where a real one sits."""
+    marker = f"ESPOTA-BUILD{{model={model};version={version}}}".encode("ascii")
+    image = bytearray(make_image(size=MIN_FIRMWARE_BYTES * 2))
+    image[600 : 600 + len(marker)] = marker
+    return bytes(image)
+
+
+def test_read_build_tag_reads_what_the_image_says_it_is():
+    tag = read_build_tag(tagged(model="ESP32-S3", version="2.4.2"))
+
+    assert tag.model == "ESP32-S3"
+    assert tag.version == "2.4.2"
+
+
+def test_read_build_tag_answers_none_for_an_image_without_one():
+    # Builds from before the marker existed, and anything from another
+    # toolchain. The caller falls back to what the uploader typed.
+    assert read_build_tag(make_image()) is None
+
+
+def test_read_build_tag_refuses_an_image_carrying_two():
+    # An application image carries exactly one, so two means the bytes are a
+    # concatenation or were edited, and picking a winner would be a guess.
+    doubled = tagged(version="1.0.4") + tagged(version="9.9.9")
+
+    with pytest.raises(InvalidFirmwareImage):
+        read_build_tag(doubled)
+
+
+def test_read_build_tag_ignores_a_marker_that_never_closes():
+    # A prefix appearing in unrelated data is not a marker. Without the closing
+    # brace the pattern must not run on and swallow whatever follows.
+    image = bytearray(make_image(size=MIN_FIRMWARE_BYTES * 2))
+    opener = b"ESPOTA-BUILD{model=ESP32;version=1.0.4"
+    image[600 : 600 + len(opener)] = opener
+
+    assert read_build_tag(bytes(image)) is None
+
+
+@pytest.mark.skipif(not REAL_IMAGE.exists(), reason="no local arduino-cli build to check against")
+def test_read_build_tag_finds_the_marker_in_a_real_arduino_cli_build():
+    # The claim the whole feature rests on: the string survives the compiler
+    # and the linker's --gc-sections, which dropped it until initOTA() printed
+    # it. A synthesized image cannot tell us that.
+    tag = read_build_tag(REAL_IMAGE.read_bytes())
+
+    assert tag is not None
+    assert tag.model == "ESP32"
