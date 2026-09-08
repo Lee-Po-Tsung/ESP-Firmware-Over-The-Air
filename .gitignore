@@ -64,3 +64,8 @@ CLAUDE.local.md
 /ElegantOTA/
 /esp32FOTA/
 /ESP_OTA_Dashboard/
+
+# Playwright: the scratch backend e2e/backend.sh builds, and run output
+frontend/e2e/.tmp/
+frontend/playwright-report/
+frontend/test-results/
