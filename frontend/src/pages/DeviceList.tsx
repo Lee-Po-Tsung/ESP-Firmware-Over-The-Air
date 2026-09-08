@@ -50,6 +50,16 @@ interface Firmware {
   created_at: string;
 }
 
+// Counted by the server, which is the only side holding both the fleet and the
+// firmware list. `unknown` is its own number rather than part of `offline`.
+interface FleetStats {
+  total: number;
+  online: number;
+  offline: number;
+  unknown: number;
+  behind_latest: number;
+}
+
 function timeAgo(iso: string | null): string {
   if (!iso) return '從未回報';
   const seconds = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);
@@ -66,6 +76,7 @@ export default function DeviceList() {
   const { session } = useAuth();
   const [apiDevices, setApiDevices] = useState<ApiDevice[]>([]);
   const [firmwares, setFirmwares] = useState<Firmware[]>([]);
+  const [stats, setStats] = useState<FleetStats | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
@@ -85,11 +96,16 @@ export default function DeviceList() {
         fetch('/backend/api/firmware/list', { headers: { Authorization: `Bearer ${session.token}` } }).then(r => {
           if (!r.ok) throw new Error('Failed to fetch firmwares');
           return r.json();
+        }),
+        fetch('/backend/api/devices/stats', { headers: { Authorization: `Bearer ${session.token}` } }).then(r => {
+          if (!r.ok) throw new Error('Failed to fetch device stats');
+          return r.json();
         })
       ])
-        .then(([devs, fws]) => {
+        .then(([devs, fws, fleetStats]) => {
           setApiDevices(devs);
           setFirmwares(fws);
+          setStats(fleetStats);
           setLastUpdated(new Date());
           setError(null);
         })
@@ -139,9 +155,8 @@ export default function DeviceList() {
     };
   });
 
-  const onlineCount = devices.filter(d => d.online === true).length;
-  const offlineCount = devices.filter(d => d.online === false).length;
-  const unknownCount = devices.filter(d => d.online === null).length;
+  // Which devices are behind, as opposed to how many, is still worked out here:
+  // the banner names them, and `/api/devices/stats` answers only with counts.
   const outdatedDevices = devices.filter(d => !d.is_latest);
   const failedDevices = devices.filter(d => d.last_error);
   // Built from the devices that checked in, not from the firmware list. A model
@@ -189,14 +204,14 @@ export default function DeviceList() {
       <div className="dev-summary-cards">
         <div className="card dev-card">
           <div className="dev-card-title text-xs text-secondary font-medium">在線</div>
-          <div className="dev-card-value text-3xl font-medium font-mono text-success">{onlineCount}</div>
+          <div className="dev-card-value text-3xl font-medium font-mono text-success">{stats?.online ?? 0}</div>
           <div className="dev-card-desc text-xs text-tertiary">心跳正常</div>
         </div>
         <div className="card dev-card">
           <div className="dev-card-title text-xs text-secondary font-medium">離線</div>
-          <div className="dev-card-value text-3xl font-medium font-mono text-error">{offlineCount}</div>
+          <div className="dev-card-value text-3xl font-medium font-mono text-error">{stats?.offline ?? 0}</div>
           <div className="dev-card-desc text-xs text-tertiary">
-            超過自報的回報間隔{unknownCount > 0 && ` · ${unknownCount} 台狀態未知`}
+            超過自報的回報間隔{!!stats?.unknown && ` · ${stats.unknown} 台狀態未知`}
           </div>
         </div>
         <div className="card dev-card">
@@ -206,7 +221,7 @@ export default function DeviceList() {
         </div>
         <div className="card dev-card">
           <div className="dev-card-title text-xs text-secondary font-medium">韌體落後</div>
-          <div className="dev-card-value text-3xl font-medium font-mono text-primary">{outdatedDevices.length}</div>
+          <div className="dev-card-value text-3xl font-medium font-mono text-primary">{stats?.behind_latest ?? 0}</div>
           <div className="dev-card-desc text-xs text-tertiary">回報後會自動更新</div>
         </div>
       </div>
