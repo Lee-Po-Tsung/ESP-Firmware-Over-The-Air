@@ -64,7 +64,7 @@ void loop() {
     // Show this build's colour first, so it is visible before any OTA kicks in.
     // The colour is the only per-version difference, so it is what tells you
     // by eye which build a device came back on after an update.
-    Serial.println("LED: PURPLE (running v1.0.4)");
+    Serial.println("LED: PURPLE (running v" FIRMWARE_VERSION ")");
     neopixelWrite(RGB_BUILTIN, 48, 0, 64);
     delay(POLL_INTERVAL_SECONDS * 1000);  // hold the colour, then re-check for an update
 

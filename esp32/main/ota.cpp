@@ -18,8 +18,18 @@
 #include <mbedtls/pk.h>
 #include <mbedtls/sha256.h>
 
-#define FIRMWARE_VERSION "1.0.4"
-#define DEVICE_MODEL "ESP32"
+// What the server reads out of an uploaded image to learn what it is, so the
+// model and version it stores cannot disagree with what the device will report.
+// Both values are already in the binary as plain strings, but nothing tells
+// them apart from the other version-shaped strings the core leaves there. The
+// marker is what makes them findable, not what puts them there.
+//
+// Kept only because initOTA() prints it. `used` stops the compiler from
+// dropping an unreferenced constant, but not the linker's --gc-sections, which
+// removed this whole string when nothing read it. The printed line doubles as
+// the boot breadcrumb saying what an image will publish as.
+const char FIRMWARE_TAG[] __attribute__((used)) =
+    "ESPOTA-BUILD{model=" DEVICE_MODEL ";version=" FIRMWARE_VERSION "}";
 
 NetworkClientSecure* client = nullptr;
 String server_url;
@@ -243,6 +253,7 @@ void delClient() {
 
 // Initialize OTA parameters with server URL and check path
 bool initOTA(const String& serverUrl, const String& checkPath) {
+    Serial.println(FIRMWARE_TAG);
     server_url = serverUrl;
     check_path = checkPath;
     return true;
