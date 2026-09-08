@@ -446,29 +446,23 @@ bool check() {
     return true;
 }
 
-// Download the firmware binary file to LittleFS
-bool downloadFirmwareToFS() {
-    if (client == nullptr) setClient();
-
-    HTTPClient https;
-    String url = server_url + download_path;
-    https.begin(*client, url);
-
+// Copy the offered image into LittleFS. Split out so downloadFirmwareToFS()
+// can own the teardown once for every way this ends.
+bool streamFirmwareToFS(HTTPClient& https) {
     int code = https.GET();
     if (code != HTTP_CODE_OK) {
         Serial.println("http connect error: " + String(code));
-        https.end();
         return false;
     }
 
     File file = LittleFS.open("/firmware.bin", "w");
     if (!file) {
-        https.end();
+        Serial.println("Error: Failed to open /firmware.bin for writing.");
         return false;
     }
+
     int written = https.writeToStream(&file);
     file.close();
-    https.end();
     if (written < 0) {
         // Covers a truncated body too: writeToStream compares Content-Length
         // against what it copied and fails rather than returning a short
@@ -476,13 +470,40 @@ bool downloadFirmwareToFS() {
         // it did write are dropped, since a partial image is worth nothing
         // and this partition only holds one.
         Serial.printf("Firmware download failed: writeToStream error %d\n", written);
-        LittleFS.remove("/firmware.bin");
-        delClient();
         return false;
     }
 
-    delClient();
     return true;
+}
+
+// Download the firmware binary file to LittleFS
+//
+// The TLS client is released after the HTTPClient that borrowed it is gone,
+// which is what the inner scope is for. ~HTTPClient runs end() again and
+// touches the client it was handed, so freeing it first turns the return into
+// a jump through a freed vtable: a 404 panicked the device at the closing
+// brace with PC=0x0 until this was scoped. Only a failure reaches that, since
+// end() on a fully read body drops the pointer and leaves nothing to touch.
+//
+// Every way out leaves the same state, rather than each path deciding for
+// itself. setClient() only allocates when the pointer is null, so a client
+// left behind is the one the next attempt runs on, session and all, and a
+// partial image left behind is 1.1 MB of a 1.25 MB partition held until
+// something happens to overwrite it.
+bool downloadFirmwareToFS() {
+    if (client == nullptr) setClient();
+
+    bool downloaded = false;
+    {
+        HTTPClient https;
+        https.begin(*client, server_url + download_path);
+        downloaded = streamFirmwareToFS(https);
+        https.end();
+    }
+
+    delClient();
+    if (!downloaded) LittleFS.remove("/firmware.bin");
+    return downloaded;
 }
 
 // Split up to 3 dot-separated integer segments into out[]. Returns the count
@@ -547,6 +568,11 @@ void markFirmwareValid() {
 }
 
 // Execute the OTA update process, including verification and flashing
+//
+// Returning at all means the update did not happen, since a flash that works
+// reboots from inside here. Every path out leaves LittleFS without a staged
+// image: the file is worth nothing once a reason to reject it is known, and
+// the partition it sits in has room for barely more than one copy.
 void OTA() {
     String fileSha256 = calculateFileSHA256("/firmware.bin");
     if (fileSha256.isEmpty()) {
@@ -594,6 +620,7 @@ void OTA() {
     File updateBin = LittleFS.open("/firmware.bin", "r");
     if (!updateBin) {
         Serial.println("Error: Failed to open /firmware.bin for flashing.");
+        LittleFS.remove("/firmware.bin");
         noteUpdateFailed("open");
         return;
     }
@@ -625,6 +652,7 @@ void OTA() {
     } else {
         Serial.println("Not enough space to begin update");
         updateBin.close();
+        LittleFS.remove("/firmware.bin");
         noteUpdateFailed("space");
     }
 }
