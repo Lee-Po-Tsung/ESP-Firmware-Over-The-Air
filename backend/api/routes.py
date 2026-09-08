@@ -25,10 +25,10 @@ from application.device_stats import DeviceStats
 from application.upload_firmware import UploadFirmware, UploadFirmwareRequest
 from domain import fleet
 from domain.auth import InvalidCredentialFormat
-from domain.firmware_image import InvalidFirmwareImage
+from domain.firmware_image import MAX_FIRMWARE_BYTES, InvalidFirmwareImage
 from domain.models import DeviceEvent, EventType, Role
 from domain.signing import InvalidManifestField
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, status
 from fastapi.responses import Response, StreamingResponse
 from ports.repository import (
     DeviceEventRepository,
@@ -39,7 +39,7 @@ from ports.repository import (
     FirmwareRepository,
     UserAlreadyExists,
 )
-from ports.storage import StorageBackend
+from ports.storage import CHUNK_SIZE, StorageBackend
 from pydantic import BaseModel, ConfigDict, Field
 
 from api.deps import (
@@ -363,16 +363,60 @@ class UploadResponse(BaseModel):
     status: str
 
 
+# Headroom for what a multipart body carries besides the file: boundaries,
+# part headers, and the model, version and notes fields. The declared length
+# covers all of it, so comparing it against the ceiling directly would reject
+# a build sitting exactly at the limit for the size of its own envelope.
+MULTIPART_OVERHEAD_ALLOWANCE = 64 * 1024
+
+
+def _too_large() -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+        detail=f"Firmware must be at most {MAX_FIRMWARE_BYTES} bytes",
+    )
+
+
+def _read_upload_capped(request: Request, upload: UploadFile) -> bytes:
+    """Read the uploaded file, refusing anything past the ceiling.
+
+    Two checks, doing different jobs. The declared body length is the only one
+    that can answer before the bytes are read, so an obviously oversized upload
+    is rejected without touching the file. It is not the authority: the client
+    writes that header, and it measures the whole multipart envelope rather
+    than the part being read here.
+
+    The capped read is the authority, and what it bounds is memory, not the
+    transfer. Starlette has already spooled the request body by the time a
+    handler runs, so nothing here stops the upload from arriving. It stops the
+    server from holding an unbounded copy of it.
+    """
+    declared = request.headers.get("content-length")
+    ceiling = MAX_FIRMWARE_BYTES + MULTIPART_OVERHEAD_ALLOWANCE
+    if declared is not None and declared.isdigit() and int(declared) > ceiling:
+        raise _too_large()
+
+    chunks: list[bytes] = []
+    total = 0
+    while chunk := upload.file.read(CHUNK_SIZE):
+        total += len(chunk)
+        if total > MAX_FIRMWARE_BYTES:
+            raise _too_large()
+        chunks.append(chunk)
+    return b"".join(chunks)
+
+
 # Upload firmware require admin privilege
 @router.post("/firmware/upload", include_in_schema=False, dependencies=[Depends(require_admin)])
 def upload(
+    request: Request,
     model: str = Form(...),
     version: str = Form(...),
     firmware: UploadFile = File(...),
     notes: str | None = Form(None),
     use_case: UploadFirmware = Depends(get_upload_firmware),
 ) -> UploadResponse:
-    data = firmware.file.read()
+    data = _read_upload_capped(request, firmware)
     try:
         use_case.execute(
             UploadFirmwareRequest(

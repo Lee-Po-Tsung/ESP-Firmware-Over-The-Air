@@ -16,11 +16,12 @@ from api.deps import (
     get_upload_firmware,
     get_user_repository,
 )
+from api.routes import MULTIPART_OVERHEAD_ALLOWANCE
 from application.auth import AuthenticateUser
 from config import get_settings
 from conftest import FakeFirmwareRepository, FakeUserRepository
 from domain import auth
-from domain.firmware_image import InvalidFirmwareImage
+from domain.firmware_image import MAX_FIRMWARE_BYTES, InvalidFirmwareImage
 from domain.models import Firmware, Role, User
 from domain.signing import InvalidManifestField
 from fastapi.testclient import TestClient
@@ -357,3 +358,97 @@ def test_deactivate_returns_404_for_unknown_id(users, client):
     res = client.post("/api/firmware/999/deactivate", headers={"Authorization": f"Bearer {token}"})
 
     assert res.status_code == 404
+
+
+def test_upload_rejects_a_body_past_the_ceiling(users, client):
+    """413, not 400. Too small means "not an image"; too large means "too large"."""
+    seed_user(users, "admin", "pw", Role.ADMIN)
+    use_case = RecordingUploadFirmware()
+    app.dependency_overrides[get_upload_firmware] = lambda: use_case
+    token = login(client, "admin", "pw")
+
+    oversized = upload_files() | {
+        "firmware": (
+            "f.bin",
+            io.BytesIO(b"\xe9" * (MAX_FIRMWARE_BYTES + 1)),
+            "application/octet-stream",
+        )
+    }
+    res = client.post(
+        "/firmware/upload", files=oversized, headers={"Authorization": f"Bearer {token}"}
+    )
+
+    assert res.status_code == 413
+    # Nothing was signed, stored or written: the use case never ran.
+    assert use_case.req is None
+
+
+def test_upload_accepts_a_body_at_the_ceiling(users, client):
+    """An off-by-one here rejects a legitimate build with no way to tell why."""
+    seed_user(users, "admin", "pw", Role.ADMIN)
+    use_case = RecordingUploadFirmware()
+    app.dependency_overrides[get_upload_firmware] = lambda: use_case
+    token = login(client, "admin", "pw")
+
+    at_limit = upload_files() | {
+        "firmware": (
+            "f.bin",
+            io.BytesIO(b"\xe9" * MAX_FIRMWARE_BYTES),
+            "application/octet-stream",
+        )
+    }
+    res = client.post(
+        "/firmware/upload", files=at_limit, headers={"Authorization": f"Bearer {token}"}
+    )
+
+    assert res.status_code == 200
+    assert len(use_case.req.data) == MAX_FIRMWARE_BYTES
+
+
+def test_upload_rejects_an_oversized_declared_body_before_reading_it(users, client):
+    """The header check is the only one that can answer without reading the file."""
+    seed_user(users, "admin", "pw", Role.ADMIN)
+    use_case = RecordingUploadFirmware()
+    app.dependency_overrides[get_upload_firmware] = lambda: use_case
+    token = login(client, "admin", "pw")
+
+    res = client.post(
+        "/firmware/upload",
+        files=upload_files(),
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Content-Length": str(MAX_FIRMWARE_BYTES + MULTIPART_OVERHEAD_ALLOWANCE + 1),
+        },
+    )
+
+    assert res.status_code == 413
+    assert use_case.req is None
+
+
+def test_upload_that_understates_its_length_is_still_capped(users, client):
+    """The declared length is written by the client, so it cannot be the rule.
+
+    The allowance the header check carries for multipart overhead makes this
+    reachable in the other direction too: a body inside that slack passes the
+    fast path and is stopped by the read.
+    """
+    seed_user(users, "admin", "pw", Role.ADMIN)
+    use_case = RecordingUploadFirmware()
+    app.dependency_overrides[get_upload_firmware] = lambda: use_case
+    token = login(client, "admin", "pw")
+
+    oversized = upload_files() | {
+        "firmware": (
+            "f.bin",
+            io.BytesIO(b"\xe9" * (MAX_FIRMWARE_BYTES + 1)),
+            "application/octet-stream",
+        )
+    }
+    res = client.post(
+        "/firmware/upload",
+        files=oversized,
+        headers={"Authorization": f"Bearer {token}", "Content-Length": "10"},
+    )
+
+    assert res.status_code == 413
+    assert use_case.req is None
