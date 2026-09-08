@@ -67,3 +67,36 @@ def test_absolute_path_filename_is_confined_to_base_dir(tmp_path):
 
     assert not (tmp_path / "etc" / "passwd").exists()
     assert (base_dir / "passwd").read_bytes() == b"malicious payload"
+
+
+def test_iter_chunks_reassembles_into_the_stored_bytes(storage):
+    data = bytes(range(256)) * 40
+    storage.put("v1.bin", data)
+
+    assert b"".join(storage.iter_chunks("v1.bin", chunk_size=100)) == data
+
+
+def test_iter_chunks_hands_back_no_more_than_a_chunk_at_a_time(storage):
+    storage.put("v1.bin", b"x" * 250)
+
+    assert [len(c) for c in storage.iter_chunks("v1.bin", chunk_size=100)] == [100, 100, 50]
+
+
+def test_iter_chunks_yields_nothing_for_an_empty_file(storage):
+    storage.put("v1.bin", b"")
+
+    assert list(storage.iter_chunks("v1.bin")) == []
+
+
+def test_iter_chunks_missing_file_raises_file_not_found(storage):
+    # Raised on the first `next`, not at the call, since this is a generator.
+    with pytest.raises(FileNotFoundError):
+        list(storage.iter_chunks("never-existed.bin"))
+
+
+def test_iter_chunks_is_confined_to_base_dir(tmp_path):
+    base_dir = tmp_path / "firmware"
+    storage = LocalStorage(base_dir)
+    storage.put("../../../../etc/passwd", b"malicious payload")
+
+    assert b"".join(storage.iter_chunks("../../../../etc/passwd")) == b"malicious payload"

@@ -28,6 +28,7 @@ from conftest import (
 from domain.models import Device, EventType, Firmware, Role, User
 from fastapi.testclient import TestClient
 from main import app
+from ports.storage import CHUNK_SIZE
 
 
 def make_operator() -> User:
@@ -40,6 +41,7 @@ def make_firmware(
     firmware_id=1,
     original_filename="main.ino.bin",
     notes=None,
+    size_bytes=1300234,
 ) -> Firmware:
     return Firmware(
         model=model,
@@ -48,7 +50,7 @@ def make_firmware(
         original_filename=original_filename,
         signature="c2ln",
         sha256="a" * 64,
-        size_bytes=1300234,
+        size_bytes=size_bytes,
         notes=notes,
         id=firmware_id,
         # `id` and `created_at` are only ever None before the row is written,
@@ -252,6 +254,56 @@ def test_download_firmware_returns_binary_with_expected_headers(client):
     assert response.headers["content-type"] == "application/octet-stream"
     # The blob is addressed by hash; the browser is offered the uploader's name.
     assert firmware.original_filename in response.headers["content-disposition"]
+
+
+def test_download_firmware_declares_the_length_the_device_checks_against(client):
+    """`ota.cpp` detects a truncated body only by comparing Content-Length.
+
+    A streaming response carries no length unless one is set, so losing this
+    header does not fail anything visible here: the device would accept a short
+    image and flash it, and only its own re-hash would catch it.
+    """
+    body = b"binary contents"
+    firmware = make_firmware(firmware_id=1, size_bytes=len(body))
+    app.dependency_overrides[get_firmware_repository] = lambda: FakeFirmwareRepository([firmware])
+    app.dependency_overrides[get_storage] = lambda: FakeStorage({firmware.filename: body})
+    app.dependency_overrides[get_device_event_repository] = lambda: FakeDeviceEventRepository()
+
+    response = client.get("/api/download/1")
+
+    assert response.headers["content-length"] == str(len(body))
+    assert "transfer-encoding" not in response.headers
+
+
+def test_download_firmware_declares_the_stored_length_not_the_file_on_disk(client):
+    """A blob truncated under the row must disagree with what the server promised.
+
+    Reading the length off the file instead would let a half-written blob
+    describe itself, and the mismatch the device relies on would never happen.
+    """
+    firmware = make_firmware(firmware_id=1, size_bytes=1300234)
+    app.dependency_overrides[get_firmware_repository] = lambda: FakeFirmwareRepository([firmware])
+    app.dependency_overrides[get_storage] = lambda: FakeStorage({firmware.filename: b"truncated"})
+    app.dependency_overrides[get_device_event_repository] = lambda: FakeDeviceEventRepository()
+
+    response = client.get("/api/download/1")
+
+    assert response.headers["content-length"] == "1300234"
+
+
+def test_download_firmware_reads_the_blob_in_pieces(client):
+    """The whole image is never resident, which is the point of the change."""
+    body = b"x" * (CHUNK_SIZE * 2 + 7)
+    firmware = make_firmware(firmware_id=1, size_bytes=len(body))
+    storage = FakeStorage({firmware.filename: body})
+    app.dependency_overrides[get_firmware_repository] = lambda: FakeFirmwareRepository([firmware])
+    app.dependency_overrides[get_storage] = lambda: storage
+    app.dependency_overrides[get_device_event_repository] = lambda: FakeDeviceEventRepository()
+
+    response = client.get("/api/download/1")
+
+    assert response.content == body
+    assert len(list(storage.iter_chunks(firmware.filename))) == 3
 
 
 @pytest.mark.parametrize(

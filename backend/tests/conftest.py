@@ -60,7 +60,7 @@ _seed_signing_key()
 
 # Imported after the environment is seeded: config must not be read before the
 # lines above have run.
-from collections.abc import Iterable  # noqa: E402
+from collections.abc import Iterable, Iterator  # noqa: E402
 
 from domain.models import Device, DeviceEvent, EventType, Firmware, User  # noqa: E402
 from domain.signing import parse_version  # noqa: E402
@@ -71,7 +71,7 @@ from ports.repository import (  # noqa: E402
     UserAlreadyExists,
     UserRepository,
 )
-from ports.storage import StorageBackend  # noqa: E402
+from ports.storage import CHUNK_SIZE, StorageBackend  # noqa: E402
 
 
 class FakeFirmwareRepository(FirmwareRepository):
@@ -184,6 +184,13 @@ class FakeStorage(StorageBackend):
 
     def get(self, filename: str) -> bytes:
         return self.files[filename]
+
+    def iter_chunks(self, filename: str, chunk_size: int = CHUNK_SIZE) -> Iterator[bytes]:
+        # Chunked for real, so a test can tell a streamed response from one
+        # that yields the whole file in a single piece.
+        data = self.files[filename]
+        for start in range(0, len(data), chunk_size):
+            yield data[start : start + chunk_size]
 
     def delete(self, filename: str) -> None:
         self.files.pop(filename, None)

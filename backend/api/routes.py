@@ -29,7 +29,7 @@ from domain.firmware_image import InvalidFirmwareImage
 from domain.models import DeviceEvent, EventType, Role
 from domain.signing import InvalidManifestField
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
-from fastapi.responses import Response
+from fastapi.responses import Response, StreamingResponse
 from ports.repository import (
     DeviceEventRepository,
     DeviceRepository,
@@ -227,10 +227,10 @@ def download_firmware(
     if firmware is None or not storage.exists(firmware.filename):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
 
-    data = storage.get(firmware.filename)
-    # `device_id` comes from the query string `/api/check` put on the URL it
-    # handed out. A cached or hand-typed URL carries none, which records an
-    # unattributed download rather than nothing at all.
+    # Recorded here rather than inside the generator below, which does not run
+    # until the client starts reading. `device_id` comes from the query string
+    # `/api/check` put on the URL it handed out; a cached or hand-typed URL
+    # carries none, which records an unattributed download rather than nothing.
     events.add(
         DeviceEvent(
             device_id=device_id,
@@ -241,10 +241,20 @@ def download_firmware(
     # The stored name is a hash. Offer a browser the name it was uploaded under;
     # the device ignores the header and reads the stream.
     download_name = firmware.original_filename or firmware.filename
-    return Response(
-        content=data,
+    return StreamingResponse(
+        storage.iter_chunks(firmware.filename),
         media_type="application/octet-stream",
-        headers={"Content-Disposition": _content_disposition(download_name)},
+        headers={
+            "Content-Disposition": _content_disposition(download_name),
+            # Set explicitly, because a streaming response otherwise goes out
+            # chunked with no length at all. `ota.cpp:469` reads the body with
+            # `writeToStream`, whose only truncation check is comparing what it
+            # copied against this header, so without it a short body flashes as
+            # if it were whole. The length comes from the row and not from the
+            # file on disk for the same reason: a blob truncated under us must
+            # disagree with what the server promised, not quietly redefine it.
+            "Content-Length": str(firmware.size_bytes),
+        },
     )
 
 

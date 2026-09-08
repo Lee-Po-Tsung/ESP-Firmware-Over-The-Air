@@ -6,9 +6,10 @@ to their basename so an upload cannot write outside the configured directory.
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from pathlib import Path
 
-from ports.storage import StorageBackend
+from ports.storage import CHUNK_SIZE, StorageBackend
 
 
 class LocalStorage(StorageBackend):
@@ -26,6 +27,13 @@ class LocalStorage(StorageBackend):
 
     def get(self, filename: str) -> bytes:
         return self._path(filename).read_bytes()
+
+    def iter_chunks(self, filename: str, chunk_size: int = CHUNK_SIZE) -> Iterator[bytes]:
+        # The handle is opened and closed inside this generator, so the port
+        # never hands a caller a resource it has to remember to release.
+        with self._path(filename).open("rb") as handle:
+            while chunk := handle.read(chunk_size):
+                yield chunk
 
     def delete(self, filename: str) -> None:
         self._path(filename).unlink(missing_ok=True)
