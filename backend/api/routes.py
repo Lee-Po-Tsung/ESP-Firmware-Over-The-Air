@@ -21,6 +21,7 @@ from urllib.parse import quote
 from application.auth import AuthenticateUser, InvalidCredentials, RegisterUser, RegisterUserRequest
 from application.check_update import CheckUpdate, CheckUpdateRequest, ModelNotFound
 from application.deactivate_firmware import DeactivateFirmware
+from application.device_stats import DeviceStats
 from application.upload_firmware import UploadFirmware, UploadFirmwareRequest
 from domain import fleet
 from domain.auth import InvalidCredentialFormat
@@ -46,6 +47,7 @@ from api.deps import (
     get_current_user,
     get_deactivate_firmware,
     get_device_repository,
+    get_device_stats,
     get_firmware_repository,
     get_register_user,
     get_storage,
@@ -302,6 +304,30 @@ def device_list_api(
         )
         for d in repo.list_all()
     ]
+
+
+class DeviceStatsResponse(BaseModel):
+    """The device page's summary counts.
+
+    `unknown` is its own count rather than folded into `offline`: a device that
+    has never checked in has told the server nothing, which is not the same as
+    one that has stopped.
+    """
+
+    total: int
+    online: int
+    offline: int
+    unknown: int
+    behind_latest: int
+
+
+# Kept above any future `/api/devices/{device_id}`, which would otherwise
+# match "stats" and hand it to the handler as an id.
+@router.get("/api/devices/stats", dependencies=[Depends(get_current_user)])
+def device_stats_api(
+    use_case: DeviceStats = Depends(get_device_stats),
+) -> DeviceStatsResponse:
+    return DeviceStatsResponse.model_validate(use_case.execute(), from_attributes=True)
 
 
 """

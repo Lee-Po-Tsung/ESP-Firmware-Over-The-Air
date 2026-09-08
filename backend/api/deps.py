@@ -12,6 +12,7 @@ from collections.abc import Iterator
 from application.auth import AuthenticateUser, RegisterUser
 from application.check_update import CheckUpdate
 from application.deactivate_firmware import DeactivateFirmware
+from application.device_stats import DeviceStats
 from application.upload_firmware import UploadFirmware
 from config import Settings, get_settings
 from domain import auth
@@ -61,6 +62,13 @@ def get_check_update(
     devices: DeviceRepository = Depends(get_device_repository),
 ) -> CheckUpdate:
     return CheckUpdate(repo, devices)
+
+
+def get_device_stats(
+    devices: DeviceRepository = Depends(get_device_repository),
+    firmware: FirmwareRepository = Depends(get_firmware_repository),
+) -> DeviceStats:
+    return DeviceStats(devices, firmware)
 
 
 def get_upload_firmware(

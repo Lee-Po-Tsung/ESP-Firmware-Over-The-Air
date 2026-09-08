@@ -5,17 +5,19 @@ The admin gate on `/firmware/upload` is covered in `test_auth_routes.py`.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import pytest
 from api.deps import (
     get_check_update,
     get_current_user,
     get_device_repository,
+    get_device_stats,
     get_firmware_repository,
     get_storage,
 )
 from application.check_update import CheckUpdate
+from application.device_stats import DeviceStats
 from conftest import FakeDeviceRepository, FakeFirmwareRepository, FakeStorage
 from domain.models import Device, Firmware, Role, User
 from fastapi.testclient import TestClient
@@ -402,3 +404,85 @@ def test_device_list_returns_devices_with_utc_last_seen(client):
             "online": None,
         }
     ]
+
+
+def seen(seconds_ago: float) -> datetime:
+    return datetime.now(timezone.utc) - timedelta(seconds=seconds_ago)
+
+
+def test_device_stats_tallies_the_fleet(client):
+    """The cards read one endpoint, so the counts cannot disagree with each other.
+
+    Counting in the browser would need the firmware list too, and a second copy
+    of the version compare to go with it.
+    """
+    devices = FakeDeviceRepository()
+    for index, (version, last_seen, interval) in enumerate(
+        [
+            ("1.0.0", seen(1), 6),  # online, behind 1.2.0
+            ("1.2.0", seen(1), 6),  # online, current
+            ("1.0.0", seen(600), 6),  # offline, behind
+            ("1.0.0", None, 6),  # never checked in, unknown, behind
+            ("1.0.0", seen(1), 6),  # online, model has nothing published
+        ],
+        start=1,
+    ):
+        devices.upsert(
+            Device(
+                id=index,
+                device_id=f"dev-{index}",
+                model="ESP32" if index < 5 else "ESP32-Unpublished",
+                current_version=version,
+                last_seen=last_seen,
+                poll_interval_seconds=interval,
+            )
+        )
+    firmware = FakeFirmwareRepository([make_firmware(version="1.2.0")])
+    app.dependency_overrides[get_device_stats] = lambda: DeviceStats(devices, firmware)
+    app.dependency_overrides[get_current_user] = lambda: make_operator()
+
+    response = client.get("/api/devices/stats")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "total": 5,
+        "online": 3,
+        "offline": 1,
+        "unknown": 1,
+        "behind_latest": 3,
+    }
+
+
+def test_device_stats_ignores_a_withdrawn_newest_version(client):
+    """Withdrawing is what an admin does to a bad release.
+
+    The card must stop counting devices as behind it at the same moment
+    `/api/check` stops offering it, or the dashboard asks for an update the
+    fleet will never be given.
+    """
+    devices = FakeDeviceRepository()
+    devices.upsert(
+        Device(
+            id=1,
+            device_id="dev-1",
+            model="ESP32",
+            current_version="1.0.0",
+            last_seen=seen(1),
+            poll_interval_seconds=6,
+        )
+    )
+    withdrawn = make_firmware(version="1.3.0", firmware_id=2)
+    withdrawn.active = False
+    firmware = FakeFirmwareRepository([make_firmware(version="1.0.0"), withdrawn])
+    app.dependency_overrides[get_device_stats] = lambda: DeviceStats(devices, firmware)
+    app.dependency_overrides[get_current_user] = lambda: make_operator()
+
+    body = client.get("/api/devices/stats").json()
+
+    assert body["behind_latest"] == 0
+
+
+def test_device_stats_requires_login(client):
+    response = client.get("/api/devices/stats")
+
+    assert response.status_code == 401
