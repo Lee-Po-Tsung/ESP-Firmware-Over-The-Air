@@ -7,7 +7,7 @@ import './FirmwareUpload.css';
 // rewording (a translation included) silently turns into a permanent error style.
 type Notice = { text: string; ok: boolean };
 
-export default function FirmwareUpload() {
+export default function FirmwareUpload({ onPublished }: { onPublished: () => void }) {
   const { session } = useAuth();
   const formRef = useRef<HTMLFormElement>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -55,6 +55,9 @@ export default function FirmwareUpload() {
       setNotice({ text: '韌體已發布。', ok: true });
       form.reset();
       setSelectedFileName('');
+      // The list is fetched once when the session appears, so without this the
+      // version just published is missing from it until the page is reloaded.
+      onPublished();
     } catch {
       setNotice({ text: '無法連線到後端，請確認 API 伺服器正在執行。', ok: false });
     } finally {

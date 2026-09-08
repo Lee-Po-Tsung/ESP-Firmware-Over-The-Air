@@ -56,10 +56,8 @@ test('an admin publishes a firmware and finds it in the list', async ({ page }) 
   // whole of what makes this assertion worth writing.
   await expect(page.locator('.alert-info')).toHaveText('韌體已發布。');
 
-  // The list is fetched once, when the session appears, and nothing wires an
-  // upload to a refetch. Reloading reads back what the server stored rather
-  // than what the form believes it sent.
-  await page.reload();
+  // No reload: a successful publish refetches the list, so what shows up here
+  // came back from the server rather than from what the form believes it sent.
   const group = page.locator('.fw-group-card').filter({ hasText: model });
   await expect(group.getByText('最新 v1.0.0')).toBeVisible();
 });
