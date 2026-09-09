@@ -29,10 +29,10 @@ class InvalidCredentialFormat(ValueError):
 def validate_credentials(username: str, password: str) -> None:
     """Reject credentials no account may be created from.
 
-    Accounts arrive through two doors, `POST /api/auth/register` and
-    `scripts/create_user.py`, and the script is the one that creates admins.
-    Stating the rules once is what keeps the door with the most privilege from
-    being the more permissive of the two.
+    `scripts/create_user.py` is the only door: there is no HTTP route that
+    creates an account, so nothing reachable over the network can seed one.
+    The rules live here rather than in the script so a second door, whenever
+    one arrives, cannot be the more permissive of the two.
     """
     if not username:
         raise InvalidCredentialFormat("username must not be empty")

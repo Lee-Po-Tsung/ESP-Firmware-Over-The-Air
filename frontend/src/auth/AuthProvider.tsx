@@ -78,22 +78,11 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
     setSession({ token: access_token, username, role: roleFromToken(access_token) });
   }, [setSession]);
 
-  const register = useCallback(async (username: string, password: string) => {
-    const res = await fetch('/backend/api/auth/register', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, password }),
-    });
-    if (!res.ok) {
-      throw new Error(await errorDetail(res, `Registration failed (HTTP ${res.status})`));
-    }
-  }, []);
-
   const logout = useCallback(() => setSession(null), [setSession]);
 
   const value = useMemo(
-    () => ({ session, login, register, logout }),
-    [session, login, register, logout],
+    () => ({ session, login, logout }),
+    [session, login, logout],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
