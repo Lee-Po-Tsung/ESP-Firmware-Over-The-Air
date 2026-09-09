@@ -62,7 +62,7 @@ export default function Firmware() {
             .sort((left, right) => left.model.localeCompare(right.model));
     }, [firmwares]);
 
-    useEffect(() => {
+    const loadFirmwares = useCallback(() => {
         if (!session) return;
 
         fetch('/backend/api/firmware/list', {
@@ -75,6 +75,8 @@ export default function Firmware() {
             .then(setFirmwares)
             .catch(e => console.error("Failed to fetch firmwares:", e));
     }, [session]);
+
+    useEffect(loadFirmwares, [loadFirmwares]);
 
     // The withdraw route answers with the updated row, so swap it in rather than
     // refetching the list and racing the effect above.
@@ -105,7 +107,10 @@ export default function Firmware() {
                 {/* Absent rather than disabled, matching the withdraw action:
                     `/firmware/upload` is admin-gated, so an operator would fill
                     the form in and collect a 403 at the end of the upload. */}
-                {canUpload && <FirmwareUpload />}
+                {/* Refetch rather than append what the form sent: the upload
+                    answers with a status, and the id, signature and timestamp
+                    the list renders only exist after the insert. */}
+                {canUpload && <FirmwareUpload onPublished={loadFirmwares} />}
                 <FirmwareList groupedFirmwares={groupedFirmwares} onWithdrawn={handleWithdrawn} />
             </div>
         </div>
