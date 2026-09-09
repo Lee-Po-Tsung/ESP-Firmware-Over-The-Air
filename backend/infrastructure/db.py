@@ -1,8 +1,8 @@
 """SQLAlchemy setup and the database table definitions.
 
-Builds the engine and session factory, and declares the `firmware` and
-`devices` tables. `sqlite_repo.py` converts between these table rows and the
-domain dataclasses.
+Builds the engine and session factory, and declares the `firmware`,
+`devices` and `device_events` tables. `sqlite_repo.py` converts between these
+table rows and the domain dataclasses.
 """
 
 from __future__ import annotations
@@ -27,8 +27,13 @@ def _utcnow() -> datetime:
 class FirmwareRow(Base):
     __tablename__ = "firmware"
 
-    # `model|version` should all be unique index.
-    __table_args__ = (Index("uq_firmware_model_version", "model", "version", unique=True),)
+    # Both identity axes are enforced here, not just in the use case: the
+    # sha256 check there reads before it writes, so two concurrent uploads of
+    # one binary both see nothing and both proceed.
+    __table_args__ = (
+        Index("uq_firmware_model_version", "model", "version", unique=True),
+        Index("uq_firmware_model_sha256", "model", "sha256", unique=True),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     model: Mapped[str] = mapped_column(String, nullable=False, index=True)
@@ -69,6 +74,33 @@ class DeviceRow(Base):
     ip: Mapped[str | None] = mapped_column(String, nullable=True)
     last_error: Mapped[str | None] = mapped_column(String, nullable=True)
     failed_attempts: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+
+class DeviceEventRow(Base):
+    """Append-only OTA history. Nothing updates or deletes a row here.
+
+    A check-in that carries no news is not recorded. Devices poll every few
+    seconds, so writing a row per check-in would add tens of thousands per
+    device per day, all saying what `devices.last_seen` already says. A `check`
+    row is written only when the server had an update to offer; a check-in on a
+    version that changed writes `success` or `rollback` instead.
+
+    `device_id` is the reported string rather than a foreign key to `devices`,
+    so an event outlives the row it describes and a download that cannot be
+    attributed still records.
+    """
+
+    __tablename__ = "device_events"
+
+    # Reads are always "this device's history, newest first".
+    __table_args__ = (Index("ix_device_events_device_id_id", "device_id", "id"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    device_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    event_type: Mapped[str] = mapped_column(String, nullable=False)
+    from_version: Mapped[str | None] = mapped_column(String, nullable=True)
+    to_version: Mapped[str | None] = mapped_column(String, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, nullable=False)
 
 
 def make_engine():

@@ -50,6 +50,12 @@
   gap: 0;
 }
 
+/* The list's left padding is trimmed to sit flush against the upload column.
+  With no upload column, that gap has nothing on the other side of it. */
+.firmware-manage-card.is-list-only .page-wrapper {
+  padding-left: 1.25rem;
+}
+
 @media (max-width: 1200px) {
   .main-card-header {
     flex-direction: column;

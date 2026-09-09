@@ -46,6 +46,11 @@ class UploadFirmware:
             # A device reports the FIRMWARE_VERSION compiled into its image, so
             # the same bytes under two versions leaves it re-reporting the old
             # one and reflashing on every check.
+            #
+            # A fast path, not the guarantee. This reads before it writes, so
+            # two concurrent uploads both pass it; `repo.add` raises the same
+            # error off the unique index for the pair that gets through. Kept
+            # because it answers before signing and storing a blob.
             raise FirmwareBinaryAlreadyExists(req.model, duplicate.version)
 
         # Sign before storing: a signing failure then leaves nothing on disk.

@@ -12,6 +12,20 @@ from datetime import datetime
 from enum import Enum
 
 
+class EventType(str, Enum):
+    """What happened to a device, as recorded in the event log.
+
+    `check` is a check-in worth keeping, `download` is a binary handed out,
+    and `success` and `rollback` are read off a device's version changing
+    between two check-ins. Stored as the string value.
+    """
+
+    CHECK = "check"
+    DOWNLOAD = "download"
+    SUCCESS = "success"
+    ROLLBACK = "rollback"
+
+
 class Role(str, Enum):
     """Who is allowed to do what.
 
@@ -97,3 +111,25 @@ class Device:
     last_error: str | None = None
     failed_attempts: int | None = None
     id: int | None = None
+
+
+@dataclass
+class DeviceEvent:
+    """One entry in the append-only OTA history.
+
+    Rows are never updated or deleted, so the log stays a record of what the
+    fleet did rather than of what it looks like now. `Device` holds the current
+    snapshot; this holds how it got there.
+
+    `device_id` is the string the device reports, not a foreign key, so an event
+    survives its device row and a download from an unregistered id still lands.
+    `from_version` and `to_version` are both optional: a `download` knows only
+    where it is going, and a first check-in knows only where it is.
+    """
+
+    device_id: str | None
+    event_type: EventType
+    from_version: str | None = None
+    to_version: str | None = None
+    id: int | None = None
+    created_at: datetime | None = None

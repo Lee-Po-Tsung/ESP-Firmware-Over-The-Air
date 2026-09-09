@@ -4,8 +4,15 @@ import type { ReactNode } from 'react';
 import DeviceList from './pages/DeviceList';
 import Firmware from './pages/Firmware';
 import Login from './pages/Login';
-import { useAuth } from './auth/context';
+import { useAuth, type Role } from './auth/context';
 import { useState, useEffect } from 'react';
+
+// Accounts are keyed by username. The backend holds no display name and no
+// email, so the role is the only other thing there is to show here.
+const ROLE_LABELS: Record<Role, string> = {
+  admin: '管理員',
+  operator: '操作員',
+};
 
 function SiderBar() {
   const { pathname } = useLocation();
@@ -78,8 +85,8 @@ function SiderBar() {
             <div className="sidebar-account">
               {session ? (
                 <>
-                  <strong className="sidebar-account-name text-sm font-medium text-primary font-mono">{session.username === 'ops' ? 'ops 團隊' : session.username}</strong>
-                  <span className="sidebar-account-email text-xs text-tertiary font-mono">{session.username}@espfleet.io</span>
+                  <strong className="sidebar-account-name text-sm font-medium text-primary font-mono">{session.username}</strong>
+                  <span className="sidebar-account-role text-xs text-tertiary font-mono">{ROLE_LABELS[session.role]}</span>
                 </>
               ) : (
                 <span className="sidebar-account-name text-sm font-medium text-primary font-mono">Guest</span>

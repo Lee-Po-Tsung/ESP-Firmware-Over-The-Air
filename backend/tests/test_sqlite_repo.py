@@ -1,16 +1,22 @@
 from __future__ import annotations
 
+import hashlib
 from datetime import datetime, timezone
 
 import pytest
-from domain.models import Device, Firmware, Role, User
+from domain.models import Device, DeviceEvent, EventType, Firmware, Role, User
 from infrastructure.db import Base
 from infrastructure.sqlite_repo import (
+    SqliteDeviceEventRepository,
     SqliteDeviceRepository,
     SqliteFirmwareRepository,
     SqliteUserRepository,
 )
-from ports.repository import FirmwareAlreadyExists, UserAlreadyExists
+from ports.repository import (
+    FirmwareAlreadyExists,
+    FirmwareBinaryAlreadyExists,
+    UserAlreadyExists,
+)
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
@@ -29,13 +35,17 @@ def session():
         yield session
 
 
-def make_firmware(model="ESP32", version="1.0.0", sha256="a" * 64) -> Firmware:
+def make_firmware(model="ESP32", version="1.0.0", sha256=None) -> Firmware:
+    # Distinct bytes per version by default, since (model, sha256) is a unique
+    # index too. A fixed hash would make every two-version test a collision on
+    # an axis it is not about.
+    digest = sha256 or hashlib.sha256(version.encode()).hexdigest()
     return Firmware(
         model=model,
         version=version,
         filename=f"{version}.bin",
         signature="sig",
-        sha256=sha256,
+        sha256=digest,
         size_bytes=1,
     )
 
@@ -86,8 +96,36 @@ def test_add_rejects_a_version_already_stored_for_the_model(session):
     repo = SqliteFirmwareRepository(session)
     repo.add(make_firmware(version="1.2.0"))
 
+    # Different bytes, so only the version axis can be what rejects this.
     with pytest.raises(FirmwareAlreadyExists):
-        repo.add(make_firmware(version="1.2.0"))
+        repo.add(make_firmware(version="1.2.0", sha256="f" * 64))
+
+
+def test_add_rejects_a_binary_already_stored_for_the_model(session):
+    """The race `get_by_sha256` cannot close.
+
+    Two uploads of one binary both read `None` from that pre-check and both
+    proceed, so this goes straight at `add` to exercise what the index does.
+    Same bytes under a different version is the only shape the race produces:
+    equal versions would be rejected by the older constraint instead.
+    """
+    repo = SqliteFirmwareRepository(session)
+    repo.add(make_firmware(version="1.2.0", sha256="b" * 64))
+
+    with pytest.raises(FirmwareBinaryAlreadyExists) as exc_info:
+        repo.add(make_firmware(version="1.3.0", sha256="b" * 64))
+
+    # Names the version already serving those bytes, which is what the 409 says.
+    assert exc_info.value.existing_version == "1.2.0"
+
+
+def test_add_allows_the_same_binary_on_another_model(session):
+    repo = SqliteFirmwareRepository(session)
+    repo.add(make_firmware(model="ESP32", sha256="b" * 64))
+
+    added = repo.add(make_firmware(model="ESP32-S3", sha256="b" * 64))
+
+    assert added.id is not None
 
 
 def test_add_allows_the_same_version_on_another_model(session):
@@ -319,3 +357,64 @@ def test_every_repository_hands_back_aware_timestamps(session):
     assert firmware.created_at.tzinfo is not None
     assert user.created_at.tzinfo is not None
     assert device.last_seen == datetime(2026, 7, 15, 12, 0, 0, tzinfo=timezone.utc)
+
+
+def make_event(device_id="dev-1", event_type=EventType.CHECK, **overrides) -> DeviceEvent:
+    return DeviceEvent(device_id=device_id, event_type=event_type, **overrides)
+
+
+def test_event_repo_stamps_utc_on_append(session):
+    repo = SqliteDeviceEventRepository(session)
+
+    event = repo.add(make_event(from_version="1.0.0", to_version="1.1.0"))
+
+    assert event.id is not None
+    assert event.created_at.tzinfo is timezone.utc
+    assert event.event_type is EventType.CHECK
+
+
+def test_event_repo_returns_one_device_history_newest_first(session):
+    repo = SqliteDeviceEventRepository(session)
+    repo.add(make_event(event_type=EventType.CHECK))
+    repo.add(make_event(event_type=EventType.DOWNLOAD))
+    repo.add(make_event(event_type=EventType.SUCCESS))
+    repo.add(make_event(device_id="other", event_type=EventType.CHECK))
+
+    history = repo.list_for_device("dev-1")
+
+    # Ordered by id: events from one check-in share a timestamp at the
+    # resolution SQLite keeps, so insertion order is the only thing that
+    # separates them.
+    assert [e.event_type for e in history] == [
+        EventType.SUCCESS,
+        EventType.DOWNLOAD,
+        EventType.CHECK,
+    ]
+
+
+def test_event_repo_finds_the_latest_of_one_type(session):
+    repo = SqliteDeviceEventRepository(session)
+    repo.add(make_event(event_type=EventType.DOWNLOAD, to_version="1.0.0"))
+    repo.add(make_event(event_type=EventType.SUCCESS, to_version="1.0.0"))
+    repo.add(make_event(event_type=EventType.DOWNLOAD, to_version="1.2.0"))
+
+    latest = repo.latest_for_device("dev-1", EventType.DOWNLOAD)
+
+    assert latest.to_version == "1.2.0"
+
+
+def test_event_repo_answers_none_for_a_device_with_no_such_event(session):
+    repo = SqliteDeviceEventRepository(session)
+    repo.add(make_event(event_type=EventType.CHECK))
+
+    assert repo.latest_for_device("dev-1", EventType.ROLLBACK) is None
+    assert repo.list_for_device("never-seen") == []
+
+
+def test_event_repo_accepts_an_unattributed_download(session):
+    """A cached or hand-typed download URL carries no device id."""
+    repo = SqliteDeviceEventRepository(session)
+
+    event = repo.add(make_event(device_id=None, event_type=EventType.DOWNLOAD))
+
+    assert event.device_id is None

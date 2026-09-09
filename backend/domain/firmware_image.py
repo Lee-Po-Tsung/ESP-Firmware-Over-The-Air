@@ -57,6 +57,16 @@ KNOWN_CHIP_IDS = frozenset(
 # kilobytes. It also keeps the fixed offsets above in bounds.
 MIN_FIRMWARE_BYTES = 1024
 
+# The matching ceiling. Derived from the largest image any chip above could
+# boot, not from this project's own app partition (0x150000): the server
+# publishes for whatever models it is told about and has no business knowing
+# one partition table. The largest external flash on that list is the P4's
+# 64 MB, and an OTA layout needs two app slots, so no bootable image reaches
+# 32 MiB. Sizing it to a real build instead would reject a legitimate one the
+# day a board with more flash appears, which is a worse failure than the
+# oversized upload this exists to stop.
+MAX_FIRMWARE_BYTES = 32 * 1024 * 1024
+
 
 class InvalidFirmwareImage(Exception):
     """Raised when uploaded bytes are not a well-formed ESP32 application image."""

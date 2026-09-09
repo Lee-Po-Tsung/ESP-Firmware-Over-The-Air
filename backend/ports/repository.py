@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 
-from domain.models import Device, Firmware, User
+from domain.models import Device, DeviceEvent, EventType, Firmware, User
 
 
 class UserRepository(ABC):
@@ -58,7 +58,11 @@ class FirmwareRepository(ABC):
     def add(self, firmware: Firmware) -> Firmware:
         """Persist a new firmware row and return it with its assigned id.
 
-        Raises `FirmwareAlreadyExists` if that (model, version) is already stored.
+        Both identity axes are enforced here rather than by the caller, since a
+        caller can only read before it writes. Raises `FirmwareAlreadyExists` if
+        that (model, version) is already stored, and `FirmwareBinaryAlreadyExists`
+        if those bytes are already stored for the model, the latter taking
+        precedence when an insert collides on both.
         """
 
     @abstractmethod
@@ -102,3 +106,19 @@ class DeviceRepository(ABC):
     @abstractmethod
     def list_all(self) -> list[Device]:
         """Return every device, most recently seen first (for the device page)."""
+
+
+class DeviceEventRepository(ABC):
+    """The OTA history. Append and read; there is no update and no delete."""
+
+    @abstractmethod
+    def add(self, event: DeviceEvent) -> DeviceEvent:
+        """Append one event."""
+
+    @abstractmethod
+    def list_for_device(self, device_id: str, limit: int = 100) -> list[DeviceEvent]:
+        """Return one device's events, newest first."""
+
+    @abstractmethod
+    def latest_for_device(self, device_id: str, event_type: EventType) -> DeviceEvent | None:
+        """Return the most recent event of one type for a device, or None."""

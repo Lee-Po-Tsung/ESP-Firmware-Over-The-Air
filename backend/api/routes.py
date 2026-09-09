@@ -21,15 +21,17 @@ from urllib.parse import quote
 from application.auth import AuthenticateUser, InvalidCredentials, RegisterUser, RegisterUserRequest
 from application.check_update import CheckUpdate, CheckUpdateRequest, ModelNotFound
 from application.deactivate_firmware import DeactivateFirmware
+from application.device_stats import DeviceStats
 from application.upload_firmware import UploadFirmware, UploadFirmwareRequest
 from domain import fleet
 from domain.auth import InvalidCredentialFormat
-from domain.firmware_image import InvalidFirmwareImage
-from domain.models import Role
+from domain.firmware_image import MAX_FIRMWARE_BYTES, InvalidFirmwareImage
+from domain.models import DeviceEvent, EventType, Role
 from domain.signing import InvalidManifestField
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
-from fastapi.responses import Response
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, status
+from fastapi.responses import Response, StreamingResponse
 from ports.repository import (
+    DeviceEventRepository,
     DeviceRepository,
     FirmwareAlreadyExists,
     FirmwareBinaryAlreadyExists,
@@ -37,7 +39,7 @@ from ports.repository import (
     FirmwareRepository,
     UserAlreadyExists,
 )
-from ports.storage import StorageBackend
+from ports.storage import CHUNK_SIZE, StorageBackend
 from pydantic import BaseModel, ConfigDict, Field
 
 from api.deps import (
@@ -45,7 +47,9 @@ from api.deps import (
     get_check_update,
     get_current_user,
     get_deactivate_firmware,
+    get_device_event_repository,
     get_device_repository,
+    get_device_stats,
     get_firmware_repository,
     get_register_user,
     get_storage,
@@ -214,21 +218,43 @@ def _content_disposition(filename: str) -> str:
 @router.get("/api/download/{firmware_id}")
 def download_firmware(
     firmware_id: int,
+    device_id: str | None = None,
     repo: FirmwareRepository = Depends(get_firmware_repository),
     storage: StorageBackend = Depends(get_storage),
+    events: DeviceEventRepository = Depends(get_device_event_repository),
 ) -> Response:
     firmware = repo.get_by_id(firmware_id)
     if firmware is None or not storage.exists(firmware.filename):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
 
-    data = storage.get(firmware.filename)
+    # Recorded here rather than inside the generator below, which does not run
+    # until the client starts reading. `device_id` comes from the query string
+    # `/api/check` put on the URL it handed out; a cached or hand-typed URL
+    # carries none, which records an unattributed download rather than nothing.
+    events.add(
+        DeviceEvent(
+            device_id=device_id,
+            event_type=EventType.DOWNLOAD,
+            to_version=firmware.version,
+        )
+    )
     # The stored name is a hash. Offer a browser the name it was uploaded under;
     # the device ignores the header and reads the stream.
     download_name = firmware.original_filename or firmware.filename
-    return Response(
-        content=data,
+    return StreamingResponse(
+        storage.iter_chunks(firmware.filename),
         media_type="application/octet-stream",
-        headers={"Content-Disposition": _content_disposition(download_name)},
+        headers={
+            "Content-Disposition": _content_disposition(download_name),
+            # Set explicitly, because a streaming response otherwise goes out
+            # chunked with no length at all. `ota.cpp:469` reads the body with
+            # `writeToStream`, whose only truncation check is comparing what it
+            # copied against this header, so without it a short body flashes as
+            # if it were whole. The length comes from the row and not from the
+            # file on disk for the same reason: a blob truncated under us must
+            # disagree with what the server promised, not quietly redefine it.
+            "Content-Length": str(firmware.size_bytes),
+        },
     )
 
 
@@ -304,6 +330,30 @@ def device_list_api(
     ]
 
 
+class DeviceStatsResponse(BaseModel):
+    """The device page's summary counts.
+
+    `unknown` is its own count rather than folded into `offline`: a device that
+    has never checked in has told the server nothing, which is not the same as
+    one that has stopped.
+    """
+
+    total: int
+    online: int
+    offline: int
+    unknown: int
+    behind_latest: int
+
+
+# Kept above any future `/api/devices/{device_id}`, which would otherwise
+# match "stats" and hand it to the handler as an id.
+@router.get("/api/devices/stats", dependencies=[Depends(get_current_user)])
+def device_stats_api(
+    use_case: DeviceStats = Depends(get_device_stats),
+) -> DeviceStatsResponse:
+    return DeviceStatsResponse.model_validate(use_case.execute(), from_attributes=True)
+
+
 """
 Admin firmware upload
 """
@@ -313,16 +363,60 @@ class UploadResponse(BaseModel):
     status: str
 
 
+# Headroom for what a multipart body carries besides the file: boundaries,
+# part headers, and the model, version and notes fields. The declared length
+# covers all of it, so comparing it against the ceiling directly would reject
+# a build sitting exactly at the limit for the size of its own envelope.
+MULTIPART_OVERHEAD_ALLOWANCE = 64 * 1024
+
+
+def _too_large() -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+        detail=f"Firmware must be at most {MAX_FIRMWARE_BYTES} bytes",
+    )
+
+
+def _read_upload_capped(request: Request, upload: UploadFile) -> bytes:
+    """Read the uploaded file, refusing anything past the ceiling.
+
+    Two checks, doing different jobs. The declared body length is the only one
+    that can answer before the bytes are read, so an obviously oversized upload
+    is rejected without touching the file. It is not the authority: the client
+    writes that header, and it measures the whole multipart envelope rather
+    than the part being read here.
+
+    The capped read is the authority, and what it bounds is memory, not the
+    transfer. Starlette has already spooled the request body by the time a
+    handler runs, so nothing here stops the upload from arriving. It stops the
+    server from holding an unbounded copy of it.
+    """
+    declared = request.headers.get("content-length")
+    ceiling = MAX_FIRMWARE_BYTES + MULTIPART_OVERHEAD_ALLOWANCE
+    if declared is not None and declared.isdigit() and int(declared) > ceiling:
+        raise _too_large()
+
+    chunks: list[bytes] = []
+    total = 0
+    while chunk := upload.file.read(CHUNK_SIZE):
+        total += len(chunk)
+        if total > MAX_FIRMWARE_BYTES:
+            raise _too_large()
+        chunks.append(chunk)
+    return b"".join(chunks)
+
+
 # Upload firmware require admin privilege
 @router.post("/firmware/upload", include_in_schema=False, dependencies=[Depends(require_admin)])
 def upload(
+    request: Request,
     model: str = Form(...),
     version: str = Form(...),
     firmware: UploadFile = File(...),
     notes: str | None = Form(None),
     use_case: UploadFirmware = Depends(get_upload_firmware),
 ) -> UploadResponse:
-    data = firmware.file.read()
+    data = _read_upload_capped(request, firmware)
     try:
         use_case.execute(
             UploadFirmwareRequest(

@@ -8,11 +8,13 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from domain.models import Device, Firmware, Role, User
+from domain.models import Device, DeviceEvent, EventType, Firmware, Role, User
 from domain.signing import parse_version
 from ports.repository import (
+    DeviceEventRepository,
     DeviceRepository,
     FirmwareAlreadyExists,
+    FirmwareBinaryAlreadyExists,
     FirmwareRepository,
     UserAlreadyExists,
     UserRepository,
@@ -21,7 +23,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from infrastructure.db import DeviceRow, FirmwareRow, UserRow
+from infrastructure.db import DeviceEventRow, DeviceRow, FirmwareRow, UserRow
 
 
 def _utc(value: datetime | None) -> datetime | None:
@@ -48,6 +50,17 @@ def _to_firmware(row: FirmwareRow) -> Firmware:
         size_bytes=row.size_bytes,
         notes=row.notes,
         active=row.active,
+        created_at=_utc(row.created_at),
+    )
+
+
+def _to_event(row: DeviceEventRow) -> DeviceEvent:
+    return DeviceEvent(
+        id=row.id,
+        device_id=row.device_id,
+        event_type=EventType(row.event_type),
+        from_version=row.from_version,
+        to_version=row.to_version,
         created_at=_utc(row.created_at),
     )
 
@@ -125,9 +138,37 @@ class SqliteFirmwareRepository(FirmwareRepository):
             self._session.commit()
         except IntegrityError as exc:
             self._session.rollback()
-            raise FirmwareAlreadyExists(firmware.model, firmware.version) from exc
+            conflict = self._conflict(firmware)
+            if conflict is None:
+                raise
+            raise conflict from exc
         self._session.refresh(row)
         return _to_firmware(row)
+
+    def _conflict(self, firmware: Firmware) -> Exception | None:
+        """Name which uniqueness a rejected insert violated, or None if neither.
+
+        Decided by re-reading rather than by parsing the driver's message, which
+        names columns on SQLite and constraint names elsewhere. The sha256 axis is
+        checked first so that one input gets one answer: an upload of bytes that
+        are already stored is reported the same way whether the use case's
+        pre-check caught it or the index did.
+
+        None means the row was rejected for something this does not know about,
+        and the caller re-raises the original error rather than mislabelling it.
+        """
+        duplicate = self.get_by_sha256(firmware.model, firmware.sha256)
+        if duplicate is not None:
+            return FirmwareBinaryAlreadyExists(firmware.model, duplicate.version)
+        existing = self._session.scalar(
+            select(FirmwareRow).where(
+                FirmwareRow.model == firmware.model,
+                FirmwareRow.version == firmware.version,
+            )
+        )
+        if existing is not None:
+            return FirmwareAlreadyExists(firmware.model, firmware.version)
+        return None
 
     def get_by_id(self, firmware_id: int) -> Firmware | None:
         row = self._session.get(FirmwareRow, firmware_id)
@@ -223,3 +264,44 @@ class SqliteDeviceRepository(DeviceRepository):
             select(DeviceRow).order_by(DeviceRow.last_seen.desc(), DeviceRow.id.desc())
         ).all()
         return [_to_device(r) for r in rows]
+
+
+class SqliteDeviceEventRepository(DeviceEventRepository):
+    def __init__(self, session: Session) -> None:
+        self._session = session
+
+    def add(self, event: DeviceEvent) -> DeviceEvent:
+        row = DeviceEventRow(
+            device_id=event.device_id,
+            event_type=event.event_type.value,
+            from_version=event.from_version,
+            to_version=event.to_version,
+        )
+        self._session.add(row)
+        self._session.commit()
+        self._session.refresh(row)
+        return _to_event(row)
+
+    def list_for_device(self, device_id: str, limit: int = 100) -> list[DeviceEvent]:
+        # Ordered by id, not `created_at`: two events from one check-in share a
+        # timestamp to the resolution SQLite stores, and insertion order is the
+        # only thing that puts them back in the order they happened.
+        rows = self._session.scalars(
+            select(DeviceEventRow)
+            .where(DeviceEventRow.device_id == device_id)
+            .order_by(DeviceEventRow.id.desc())
+            .limit(limit)
+        ).all()
+        return [_to_event(r) for r in rows]
+
+    def latest_for_device(self, device_id: str, event_type: EventType) -> DeviceEvent | None:
+        row = self._session.scalar(
+            select(DeviceEventRow)
+            .where(
+                DeviceEventRow.device_id == device_id,
+                DeviceEventRow.event_type == event_type.value,
+            )
+            .order_by(DeviceEventRow.id.desc())
+            .limit(1)
+        )
+        return _to_event(row) if row else None

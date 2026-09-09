@@ -61,35 +61,6 @@
   gap: 1.2rem;
 }
 
-.login-form-actions {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.login-remember {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  cursor: pointer;
-}
-
-.login-remember input[type="checkbox"] {
-  width: 1.2rem;
-  height: 1.2rem;
-  accent-color: var(--text-primary);
-  cursor: pointer;
-}
-
-.login-forgot {
-  text-decoration: underline;
-  text-underline-offset: 2px;
-}
-
-.login-forgot:hover {
-  color: var(--text-primary);
-}
-
 .login-footer {
   margin-top: 1.5rem;
   text-align: left;

@@ -60,17 +60,20 @@ _seed_signing_key()
 
 # Imported after the environment is seeded: config must not be read before the
 # lines above have run.
-from collections.abc import Iterable  # noqa: E402
+from collections.abc import Iterable, Iterator  # noqa: E402
 
-from domain.models import Device, Firmware, User  # noqa: E402
+from domain.models import Device, DeviceEvent, EventType, Firmware, User  # noqa: E402
 from domain.signing import parse_version  # noqa: E402
 from ports.repository import (  # noqa: E402
+    DeviceEventRepository,
     DeviceRepository,
+    FirmwareAlreadyExists,
+    FirmwareBinaryAlreadyExists,
     FirmwareRepository,
     UserAlreadyExists,
     UserRepository,
 )
-from ports.storage import StorageBackend  # noqa: E402
+from ports.storage import CHUNK_SIZE, StorageBackend  # noqa: E402
 
 
 class FakeFirmwareRepository(FirmwareRepository):
@@ -86,6 +89,15 @@ class FakeFirmwareRepository(FirmwareRepository):
         self.added: list[Firmware] = []
 
     def add(self, firmware: Firmware) -> Firmware:
+        # Both rejections the port promises. Subclassing catches a method added
+        # to a port, not behaviour added to one, so a fake that accepts what the
+        # real repository refuses would leave every caller-side test passing on
+        # a contract nothing upholds.
+        duplicate = self.get_by_sha256(firmware.model, firmware.sha256)
+        if duplicate is not None:
+            raise FirmwareBinaryAlreadyExists(firmware.model, duplicate.version)
+        if any(f.model == firmware.model and f.version == firmware.version for f in self.rows):
+            raise FirmwareAlreadyExists(firmware.model, firmware.version)
         firmware.id = len(self.rows) + 1
         self.rows.append(firmware)
         self.added.append(firmware)
@@ -132,6 +144,30 @@ class FakeDeviceRepository(DeviceRepository):
         return list(self.devices.values())
 
 
+class FakeDeviceEventRepository(DeviceEventRepository):
+    def __init__(self) -> None:
+        self.events: list[DeviceEvent] = []
+
+    def add(self, event: DeviceEvent) -> DeviceEvent:
+        event.id = len(self.events) + 1
+        self.events.append(event)
+        return event
+
+    def list_for_device(self, device_id: str, limit: int = 100) -> list[DeviceEvent]:
+        matching = [e for e in self.events if e.device_id == device_id]
+        return list(reversed(matching))[:limit]
+
+    def latest_for_device(self, device_id: str, event_type: EventType) -> DeviceEvent | None:
+        matching = [
+            e for e in self.events if e.device_id == device_id and e.event_type == event_type
+        ]
+        return matching[-1] if matching else None
+
+    def types(self) -> list[EventType]:
+        """Every event type recorded, in order. What most tests actually assert."""
+        return [e.event_type for e in self.events]
+
+
 class FakeUserRepository(UserRepository):
     def __init__(self) -> None:
         self.users: dict[str, User] = {}
@@ -159,6 +195,13 @@ class FakeStorage(StorageBackend):
 
     def get(self, filename: str) -> bytes:
         return self.files[filename]
+
+    def iter_chunks(self, filename: str, chunk_size: int = CHUNK_SIZE) -> Iterator[bytes]:
+        # Chunked for real, so a test can tell a streamed response from one
+        # that yields the whole file in a single piece.
+        data = self.files[filename]
+        for start in range(0, len(data), chunk_size):
+            yield data[start : start + chunk_size]
 
     def delete(self, filename: str) -> None:
         self.files.pop(filename, None)

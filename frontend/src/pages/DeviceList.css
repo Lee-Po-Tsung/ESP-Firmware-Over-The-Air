@@ -95,6 +95,7 @@
 
 .dot-green { background-color: var(--color-success); }
 .dot-red { background-color: var(--color-error); }
+.dot-amber { background-color: var(--color-warning); }
 
 .dev-device-text {
   display: flex;
@@ -142,4 +143,9 @@
 .dev-fw-error {
   margin-top: 0.2rem;
   color: var(--text-error);
+}
+
+.dev-empty-state {
+  padding: 2rem 1.25rem;
+  text-align: center;
 }

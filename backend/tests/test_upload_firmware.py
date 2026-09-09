@@ -42,6 +42,17 @@ class RejectingFirmwareRepository(FakeFirmwareRepository):
         raise FirmwareAlreadyExists(firmware.model, firmware.version)
 
 
+class RacingFirmwareRepository(FakeFirmwareRepository):
+    """Empty to every read, rejecting on write, which is what the race looks like.
+
+    Seeding a row instead would make `get_by_sha256` answer and the use case
+    would never reach `add`.
+    """
+
+    def add(self, firmware: Firmware) -> Firmware:
+        raise FirmwareBinaryAlreadyExists(firmware.model, "1.0.2")
+
+
 def repository_already_holding(data: bytes, model="ESP32", version="1.0.2"):
     """A repository whose rows already contain exactly these bytes."""
     sha256 = signing.calculate_sha256_bytes(data)
@@ -306,3 +317,29 @@ def test_execute_rejects_a_binary_already_stored_under_another_version(keypair):
     assert exc_info.value.existing_version == "1.0.2"
     assert storage.files == {}
     assert repo.added == []
+
+
+def test_execute_leaves_the_blob_when_the_index_rejects_the_binary(keypair):
+    """The half of the duplicate check `get_by_sha256` cannot reach.
+
+    A concurrent upload of the same bytes passes the pre-check, since that reads
+    before it writes, and is rejected by `add` instead. The blob stays: it is
+    named after its contents, so it is the file the row that won is served from.
+    """
+    _, private_pem = keypair
+    data = valid_image()
+    repo, storage = RacingFirmwareRepository(), FakeStorage()
+    use_case = UploadFirmware(repo, storage, private_pem)
+
+    with pytest.raises(FirmwareBinaryAlreadyExists) as exc_info:
+        use_case.execute(
+            UploadFirmwareRequest(
+                model="ESP32",
+                version="1.0.3",
+                original_filename="firmware.bin",
+                data=data,
+            )
+        )
+
+    assert exc_info.value.existing_version == "1.0.2"
+    assert storage.files == {f"{signing.calculate_sha256_bytes(data)}.bin": data}
