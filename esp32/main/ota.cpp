@@ -38,17 +38,26 @@ String download_path;
 String version;
 String signature;
 
-// A version already found to carry the running image, cached so the server
-// re-offering it costs no second download. RAM only, so a reboot re-learns it.
-String skipped_version;
+// Offers already answered, cached so the server re-offering one costs no
+// second download. Both are keyed on the signature rather than on the version
+// string: the signature covers model|version|sha256, so it is bound to the
+// bytes, while a version is a label an operator types and can republish over a
+// corrected binary. Keyed on the label, that corrected binary would be
+// suppressed as one of these until the device is power-cycled.
+//
+// RAM only, so a reboot re-learns both. State written at flash time would go
+// stale the moment a new image failed its rollback check, whereas the running
+// partition is always authoritative.
+//
+// An offer found to carry the image already running.
+String skipped_signature;
 
-// A version whose update attempt did not complete, and how many attempts it
-// has cost. A failed update is not a reason to reboot: the device keeps
-// running the image it has. Without this it would re-download the same broken
-// version every poll forever, so check() consults it to stop offering one that
-// cannot succeed. Counted per version, so a newly published fix starts clean.
-// RAM only, like skipped_version.
-String failed_version;
+// An offer whose update attempt did not complete, and how many attempts it has
+// cost. A failed update is not a reason to reboot: the device keeps running
+// the image it has. Without this it would re-download the same broken image
+// every poll forever, so check() consults it to stop retrying one that cannot
+// succeed. Counted per offer, so a newly published fix starts clean.
+String failed_signature;
 int failed_attempts = 0;
 
 // Why the last attempt gave up, as a short stable token. Serial is the only
@@ -363,8 +372,8 @@ bool loadConfig(String& ssid, String& password, String& identity, String& userna
 }
 
 void noteUpdateFailed(const char* reason) {
-    if (version != failed_version) {
-        failed_version = version;
+    if (signature != failed_signature) {
+        failed_signature = signature;
         failed_attempts = 0;
     }
     failed_attempts++;
@@ -373,10 +382,10 @@ void noteUpdateFailed(const char* reason) {
                   failed_attempts);
 }
 
-// Whether a version that has already failed `attempts` times is worth another
+// Whether an offer that has already failed `attempts` times is worth another
 // try on this check. Returning false makes check() ignore it until the server
-// offers a different version.
-bool shouldRetryFailedVersion(const String& candidate, int attempts) {
+// offers different bytes.
+bool shouldRetryFailedOffer(int attempts) {
     if (attempts > 3) return false;
 
     return true;
@@ -436,24 +445,24 @@ bool check() {
     }
 
     version = doc["version"].as<String>();
+    signature = doc["signature"].as<String>();
+    download_path = doc["download_url"].as<String>();
 
-    // (model, version) names one binary for good on the server, so a version
-    // already found to be the running image can never become a real update.
-    if (!skipped_version.isEmpty() && version == skipped_version) {
+    // Both answers below are about bytes this device has already seen, so they
+    // are read off the signature. The version only names them in the log.
+    if (!skipped_signature.isEmpty() && signature == skipped_signature) {
         Serial.println("Ignoring " + version + ": already known to be the running image");
         delClient();
         return false;
     }
 
-    if (version == failed_version && !shouldRetryFailedVersion(version, failed_attempts)) {
+    if (signature == failed_signature && !shouldRetryFailedOffer(failed_attempts)) {
         Serial.println("Ignoring " + version + " after " + String(failed_attempts) +
                        " failed attempt(s)");
         delClient();
         return false;
     }
 
-    signature = doc["signature"].as<String>();
-    download_path = doc["download_url"].as<String>();
     return true;
 }
 
@@ -595,7 +604,7 @@ void OTA() {
     if (isImageAlreadyRunning("/firmware.bin")) {
         Serial.printf("Version %s carries the image already running; not flashing.\n",
                       version.c_str());
-        skipped_version = version;
+        skipped_signature = signature;
         LittleFS.remove("/firmware.bin");
         return;
     }
