@@ -4,7 +4,11 @@ import base64
 import struct
 
 import pytest
-from application.upload_firmware import UploadFirmware, UploadFirmwareRequest
+from application.upload_firmware import (
+    InvalidUploadIdentity,
+    UploadFirmware,
+    UploadFirmwareRequest,
+)
 from conftest import FakeFirmwareRepository, FakeStorage
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding, rsa
@@ -103,8 +107,8 @@ def test_execute_stores_data_under_its_content_hash(keypair):
 def test_execute_stores_nothing_when_the_version_is_malformed(keypair):
     """A `v` prefix used to upload cleanly and then never reach a single device.
 
-    The field check runs before the image check because it is the cheaper of
-    the two and neither depends on the other.
+    Reached through the fallback: this image carries no marker, so the typed
+    version is the one that gets checked.
     """
     _, private_pem = keypair
     repo, storage = FakeFirmwareRepository(), FakeStorage()
@@ -343,3 +347,107 @@ def test_execute_leaves_the_blob_when_the_index_rejects_the_binary(keypair):
 
     assert exc_info.value.existing_version == "1.0.2"
     assert storage.files == {f"{signing.calculate_sha256_bytes(data)}.bin": data}
+
+
+def tagged_image(model: str = "ESP32", version: str = "1.0.5", filler: int = 0) -> bytes:
+    """A valid image that names itself, the way a real build does."""
+    marker = f"ESPOTA-BUILD{{model={model};version={version}}}".encode("ascii")
+    image = bytearray(valid_image(filler))
+    image[600 : 600 + len(marker)] = marker
+    return bytes(image)
+
+
+def test_execute_publishes_what_the_image_says_it_is(keypair):
+    """The normal path: nothing is typed, so nothing can be mistyped."""
+    _, private_pem = keypair
+    repo, storage = FakeFirmwareRepository(), FakeStorage()
+    use_case = UploadFirmware(repo, storage, private_pem)
+
+    firmware = use_case.execute(
+        UploadFirmwareRequest(
+            original_filename="main.ino.bin",
+            data=tagged_image(model="ESP32-S3", version="2.4.2"),
+        )
+    )
+
+    assert firmware.model == "ESP32-S3"
+    assert firmware.version == "2.4.2"
+
+
+def test_execute_signs_the_manifest_the_image_names(keypair):
+    """The signature has to cover the resolved identity, not the typed one.
+
+    A manifest signed over anything else verifies against nothing the device
+    rebuilds, which is a signature failure on-device rather than a clear error
+    here.
+    """
+    private_key, private_pem = keypair
+    repo, storage = FakeFirmwareRepository(), FakeStorage()
+    use_case = UploadFirmware(repo, storage, private_pem)
+    data = tagged_image(model="ESP32-S3", version="2.4.2")
+
+    firmware = use_case.execute(UploadFirmwareRequest(original_filename="main.ino.bin", data=data))
+
+    manifest = signing.build_manifest("ESP32-S3", "2.4.2", firmware.sha256).encode("utf-8")
+    private_key.public_key().verify(
+        base64.b64decode(firmware.signature),
+        manifest,
+        padding.PSS(mgf=padding.MGF1(hashes.SHA256()), salt_length=padding.PSS.MAX_LENGTH),
+        hashes.SHA256(),
+    )
+
+
+def test_execute_stores_nothing_when_the_label_contradicts_the_image(keypair):
+    """Refused, not corrected. Storing it right under a wrong belief keeps the
+    belief, and the next decision is made on it."""
+    _, private_pem = keypair
+    repo, storage = FakeFirmwareRepository(), FakeStorage()
+    use_case = UploadFirmware(repo, storage, private_pem)
+
+    with pytest.raises(InvalidUploadIdentity) as exc_info:
+        use_case.execute(
+            UploadFirmwareRequest(
+                original_filename="main.ino.bin",
+                data=tagged_image(version="1.0.5"),
+                model="ESP32",
+                version="1.0.4",
+            )
+        )
+
+    # Both values, since only the admin can tell which one is the mistake.
+    assert "1.0.5" in str(exc_info.value)
+    assert "1.0.4" in str(exc_info.value)
+    assert storage.files == {}
+    assert repo.added == []
+
+
+def test_execute_accepts_a_label_that_agrees_with_the_image(keypair):
+    _, private_pem = keypair
+    repo, storage = FakeFirmwareRepository(), FakeStorage()
+    use_case = UploadFirmware(repo, storage, private_pem)
+
+    firmware = use_case.execute(
+        UploadFirmwareRequest(
+            original_filename="main.ino.bin",
+            data=tagged_image(version="1.0.5"),
+            model="ESP32",
+            version="1.0.5",
+        )
+    )
+
+    assert firmware.version == "1.0.5"
+
+
+def test_execute_needs_a_label_for_an_image_that_carries_none(keypair):
+    """The fallback's own failure: nothing in the bytes says what they are."""
+    _, private_pem = keypair
+    repo, storage = FakeFirmwareRepository(), FakeStorage()
+    use_case = UploadFirmware(repo, storage, private_pem)
+
+    with pytest.raises(InvalidUploadIdentity):
+        use_case.execute(
+            UploadFirmwareRequest(original_filename="main.ino.bin", data=valid_image())
+        )
+
+    assert storage.files == {}
+    assert repo.added == []

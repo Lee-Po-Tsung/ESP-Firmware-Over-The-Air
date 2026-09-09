@@ -2,6 +2,12 @@
 #include <Arduino.h>
 #include <LittleFS.h>
 
+// What this build reports and publishes under. Declared here rather than in
+// ota.cpp so the sketch prints the same value it sends, instead of a second
+// copy someone has to remember to edit.
+#define FIRMWARE_VERSION "1.0.4"
+#define DEVICE_MODEL "ESP32"
+
 // How long loop() waits before calling check() again. The device sends this
 // with every check-in so the server can tell a late device from a dead one
 // without keeping its own copy of the number to align by hand.

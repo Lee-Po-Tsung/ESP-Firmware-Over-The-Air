@@ -22,7 +22,11 @@ from application.auth import AuthenticateUser, InvalidCredentials
 from application.check_update import CheckUpdate, CheckUpdateRequest, ModelNotFound
 from application.deactivate_firmware import DeactivateFirmware
 from application.device_stats import DeviceStats
-from application.upload_firmware import UploadFirmware, UploadFirmwareRequest
+from application.upload_firmware import (
+    InvalidUploadIdentity,
+    UploadFirmware,
+    UploadFirmwareRequest,
+)
 from domain import fleet
 from domain.firmware_image import MAX_FIRMWARE_BYTES, InvalidFirmwareImage
 from domain.models import DeviceEvent, EventType
@@ -329,6 +333,10 @@ Admin firmware upload
 
 class UploadResponse(BaseModel):
     status: str
+    # What it was published as, which the uploader may not have typed: an image
+    # carrying a build marker names itself.
+    model: str
+    version: str
 
 
 # Headroom for what a multipart body carries besides the file: boundaries,
@@ -378,15 +386,17 @@ def _read_upload_capped(request: Request, upload: UploadFile) -> bytes:
 @router.post("/firmware/upload", include_in_schema=False, dependencies=[Depends(require_admin)])
 def upload(
     request: Request,
-    model: str = Form(...),
-    version: str = Form(...),
     firmware: UploadFile = File(...),
+    # Optional because the image usually answers this. They are still read, and
+    # a value that contradicts the image is refused rather than overwritten.
+    model: str | None = Form(None),
+    version: str | None = Form(None),
     notes: str | None = Form(None),
     use_case: UploadFirmware = Depends(get_upload_firmware),
 ) -> UploadResponse:
     data = _read_upload_capped(request, firmware)
     try:
-        use_case.execute(
+        stored = use_case.execute(
             UploadFirmwareRequest(
                 model=model,
                 version=version,
@@ -395,7 +405,7 @@ def upload(
                 notes=notes,
             )
         )
-    except (InvalidManifestField, InvalidFirmwareImage) as exc:
+    except (InvalidManifestField, InvalidFirmwareImage, InvalidUploadIdentity) as exc:
         # The validator's message names the field that failed, so pass it
         # through rather than flattening every rejection into one string.
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
@@ -409,7 +419,7 @@ def upload(
             status_code=status.HTTP_409_CONFLICT,
             detail="Version already exists for this model",
         ) from exc
-    return UploadResponse(status="ok")
+    return UploadResponse(status="ok", model=stored.model, version=stored.version)
 
 
 @router.post("/api/firmware/{firmware_id}/deactivate", dependencies=[Depends(require_admin)])
