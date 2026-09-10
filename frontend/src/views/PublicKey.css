@@ -30,3 +30,9 @@ soft wrap that survives a copy turns into a key the server cannot parse. */
   display: flex;
   gap: var(--space-sm);
 }
+
+/* The card is a flex column, so a lone button stretches the full width of it
+and reads as the card's primary action. This one only reopens the form. */
+.key-reopen {
+  align-self: flex-start;
+}

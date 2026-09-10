@@ -101,13 +101,18 @@ export default function Firmware() {
                     )}
                 </div>
             </div>
-            <PublicKey />
 
             <div className="firmware-manage-card">
-                {/* Refetch rather than append what the form sent: the upload
-                    answers with a status, and the id, signature and timestamp
-                    the list renders only exist after the insert. */}
-                <FirmwareUpload onPublished={loadFirmwares} />
+                {/* One column, in the order the work happens: an account sets
+                    a signing key before it can publish anything, and the
+                    publish button says so until it has. */}
+                <div className="firmware-publish-column">
+                    <PublicKey />
+                    {/* Refetch rather than append what the form sent: the upload
+                        answers with a status, and the id, signature and timestamp
+                        the list renders only exist after the insert. */}
+                    <FirmwareUpload onPublished={loadFirmwares} />
+                </div>
                 <FirmwareList groupedFirmwares={groupedFirmwares} onWithdrawn={handleWithdrawn} />
             </div>
         </div>

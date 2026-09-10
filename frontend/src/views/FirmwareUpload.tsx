@@ -193,23 +193,30 @@ export default function FirmwareUpload({ onPublished }: { onPublished: () => voi
             key would stay out of the upload only because the input carries no
             `name`, which is one attribute between a signing key and the wire.
             Here there is no arrangement of attributes that could send it. */}
-        <div className="form-group signing-key">
-          <label className="form-label" htmlFor="signing-key">簽章私鑰</label>
-          <input
-            id="signing-key"
-            type="file"
-            className="form-input"
-            accept=".pem,.key"
-            onChange={handleKeyChange}
-          />
+        <div className="form-group">
+          <label className="form-label" htmlFor="signing-key">簽章私鑰（.pem）</label>
+          <div className="dropzone">
+            <input
+              id="signing-key"
+              type="file"
+              className="dropzone-input"
+              accept=".pem,.key"
+              onChange={handleKeyChange}
+            />
+            <div className="dropzone-content">
+              <span className="btn btn-secondary">
+                + 選擇 .pem 檔
+              </span>
+              {keyName && !keyError
+                ? <span className="form-help font-mono">{keyName}</span>
+                : <span className="form-help">或拖曳檔案到這裡</span>}
+            </div>
+          </div>
           <span className="form-help">
             選了之後，下面的簽章會在這個瀏覽器分頁裡算好。私鑰不會上傳，也不會離開這台機器。
             習慣用終端機的話可以不選，自己跑{' '}
             <code className="font-mono">sign_firmware.py</code> 再把結果貼到簽章欄。
           </span>
-          {keyName && !keyError && (
-            <span className="form-help font-mono">已載入 {keyName}</span>
-          )}
           {keyError && (
             <div className="alert alert-error">
               <span className="alert-title">私鑰讀取失敗：</span>
@@ -219,6 +226,30 @@ export default function FirmwareUpload({ onPublished }: { onPublished: () => voi
         </div>
 
         <form ref={formRef} onSubmit={handleSubmit}>
+          {/* Next to the key that produces it, rather than after the fields
+              it covers. Filled in by the effect above whenever a key is
+              loaded, and typed into only by someone who signed elsewhere.
+              Inside the form because it is sent; the key above is not. */}
+          <div className="form-group">
+            <label className="form-label" htmlFor="firmware-signature">簽章</label>
+            <textarea
+              id="firmware-signature"
+              name="signature"
+              className="form-input font-mono"
+              rows={3}
+              placeholder={signingKey ? '選好下面的映像檔就會自動填' : '貼上 sign_firmware.py 印出來的那一段'}
+              value={signature}
+              onChange={event => setSignature(event.target.value)}
+              style={{ resize: 'vertical' }}
+              required
+            />
+            <span className="form-help">
+              {signingKey
+                ? '用上面那把私鑰在這個分頁裡簽的。換檔案或改版號都會重簽：簽章綁的是這三樣東西。'
+                : '沒有選私鑰的話，自己跑 sign_firmware.py 產生。換檔案的話要重簽：簽章綁的是這個檔案的雜湊。'}
+            </span>
+          </div>
+
           <div className="form-group">
             <label className="form-label" htmlFor="firmware-file">韌體映像檔（.bin）</label>
             <div className="dropzone">
@@ -303,26 +334,6 @@ export default function FirmwareUpload({ onPublished }: { onPublished: () => voi
             />
             <span className="form-help">
               {identified ? '從映像檔讀出來的。' : '三段數字：主版本.次版本.修訂號'}
-            </span>
-          </div>
-
-          <div className="form-group">
-            <label className="form-label" htmlFor="firmware-signature">簽章</label>
-            <textarea
-              id="firmware-signature"
-              name="signature"
-              className="form-input font-mono"
-              rows={3}
-              placeholder={signingKey ? '選好映像檔就會自動填' : '貼上 sign_firmware.py 印出來的那一段'}
-              value={signature}
-              onChange={event => setSignature(event.target.value)}
-              style={{ resize: 'vertical' }}
-              required
-            />
-            <span className="form-help">
-              {signingKey
-                ? '用上面那把私鑰在這個分頁裡簽的。換檔案或改版號都會重簽：簽章綁的是這三樣東西。'
-                : '沒有選私鑰的話，自己跑 sign_firmware.py 產生。換檔案的話要重簽：簽章綁的是這個檔案的雜湊。'}
             </span>
           </div>
 

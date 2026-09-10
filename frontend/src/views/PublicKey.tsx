@@ -146,7 +146,11 @@ export default function PublicKey() {
           )}
         </form>
       ) : (
-        <button type="button" className="btn btn-secondary" onClick={() => setExpanded(true)}>
+        <button
+          type="button"
+          className="btn btn-secondary key-reopen"
+          onClick={() => setExpanded(true)}
+        >
           更換公鑰
         </button>
       )}
