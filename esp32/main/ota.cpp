@@ -434,7 +434,14 @@ bool check() {
     }
     String data;
     serializeJson(req, data);
-    Serial.println("Check request: " + data);
+
+    // Logged without the secret. Flash can be dumped by anyone holding the
+    // board, so serial adds no capability to them, but a serial log is a thing
+    // people paste into an issue and a flash dump is not.
+    req["device_secret"] = "<redacted>";
+    String loggable;
+    serializeJson(req, loggable);
+    Serial.println("Check request: " + loggable);
 
     HTTPClient https;
     https.begin(*client, server_url + check_path);
