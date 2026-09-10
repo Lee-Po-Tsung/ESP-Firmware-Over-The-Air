@@ -12,6 +12,8 @@ uv sync
 # Generate the key pair you will sign firmware with (backend/keys/). This pair
 # belongs to whoever publishes, not to the server: the server holds no private
 # key and only verifies uploads against the public half on your account.
+# Optional: the dashboard can generate the same pair in the browser and hand
+# you the private half as a file. Use this if you would rather stay in a shell.
 uv run python backend/scripts/generate_keys.py
 
 # Generate a self-signed TLS cert for your LAN IP (backend/keys/).
@@ -100,6 +102,9 @@ arduino-cli compile --fqbn esp32:esp32:esp32s3 --board-options "PartitionScheme=
   arduino-cli compile --fqbn esp32:esp32:esp32s3 --board-options "PartitionScheme=custom,CDCOnBoot=cdc" --export-binaries esp32/main
   ```
 - Sign it. The server verifies and never signs, so an unsigned upload is refused.
+  In the dashboard, pick your `private_key.pem` next to the image and the signature
+  is computed in the browser; the key is read there and goes nowhere else. From a
+  shell:
   ```bash
   uv run python backend/scripts/sign_firmware.py esp32/main/build/esp32.esp32.esp32s3/main.ino.bin
   ```

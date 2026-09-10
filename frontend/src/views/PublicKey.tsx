@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useAuth } from '../auth/context';
+import { generateKeyPair } from '../crypto/signing';
 import './PublicKey.css';
 
 // Where an account's signing identity is set. The server holds no private key
@@ -11,8 +12,34 @@ export default function PublicKey() {
   const [expanded, setExpanded] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [generating, setGenerating] = useState(false);
+  const [handedOver, setHandedOver] = useState(false);
 
   const hasKey = session?.account.hasPublicKey ?? false;
+
+  // Generated here rather than on the server, which is the same reason the
+  // server holds no key of its own: the private half exists only on the
+  // machine that publishes. It leaves this page once, as a file, and the only
+  // copy after that is the operator's.
+  async function handleGenerate() {
+    setGenerating(true);
+    setError(null);
+    try {
+      const { publicPem, privatePem } = await generateKeyPair();
+      const url = URL.createObjectURL(new Blob([privatePem], { type: 'application/x-pem-file' }));
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'private_key.pem';
+      link.click();
+      URL.revokeObjectURL(url);
+      setPem(publicPem);
+      setHandedOver(true);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '產生金鑰失敗。');
+    } finally {
+      setGenerating(false);
+    }
+  }
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -31,6 +58,7 @@ export default function PublicKey() {
       }
       setHasPublicKey(true);
       setPem('');
+      setHandedOver(false);
       setExpanded(false);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Request failed');
@@ -57,9 +85,10 @@ export default function PublicKey() {
         <div className="alert alert-warning">
           <span>
             <span className="alert-title">還不能發布韌體。</span>
-            先用 <code className="font-mono">generate_keys.py</code> 產一組金鑰，把{' '}
-            <code className="font-mono">public_key.pem</code> 的內容貼進下面那格。
+            按下面的按鈕產生一組金鑰，私鑰會存成檔案下載到你的電腦，公鑰會填進下面那格。
             同一把公鑰也要放進每台裝置的 config.json，裝置才驗得過下載回來的韌體。
+            已經有金鑰的話（例如用 <code className="font-mono">generate_keys.py</code> 產的），
+            直接把 <code className="font-mono">public_key.pem</code> 的內容貼進去。
           </span>
         </div>
       )}
@@ -82,7 +111,23 @@ export default function PublicKey() {
             </div>
           )}
 
+          {handedOver && (
+            <div className="alert alert-warning">
+              <span className="alert-title">私鑰只會給你這一次。</span>
+              它沒有存在伺服器上，這一頁關掉就沒有了。發布韌體要用它簽章，弄丟的話只能重產一把，
+              並且重燒每一台裝置的 config.json。
+            </div>
+          )}
+
           <div className="key-actions">
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={handleGenerate}
+              disabled={generating}
+            >
+              {generating ? '產生中...' : '在瀏覽器產生一組'}
+            </button>
             <button type="submit" className="btn btn-primary" disabled={submitting}>
               {submitting ? '設定中...' : hasKey ? '換成這把' : '設定公鑰'}
             </button>

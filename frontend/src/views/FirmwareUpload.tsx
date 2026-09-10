@@ -1,5 +1,6 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../auth/context';
+import { importPrivateKey, sha256Hex, signManifest, type SigningKey } from '../crypto/signing';
 import './FirmwareUpload.css';
 
 // Outcome rides alongside the text instead of being sniffed back out of it.
@@ -29,6 +30,10 @@ export default function FirmwareUpload({ onPublished }: { onPublished: () => voi
   const [model, setModel] = useState('');
   const [version, setVersion] = useState('');
   const [signature, setSignature] = useState('');
+  const [fileBytes, setFileBytes] = useState<ArrayBuffer | null>(null);
+  const [signingKey, setSigningKey] = useState<SigningKey | null>(null);
+  const [keyName, setKeyName] = useState('');
+  const [keyError, setKeyError] = useState<string | null>(null);
 
   const identified = inspection.state === 'found';
   const canPublish = session?.account.hasPublicKey ?? false;
@@ -50,6 +55,7 @@ export default function FirmwareUpload({ onPublished }: { onPublished: () => voi
     setSignature('');
 
     if (!file) {
+      setFileBytes(null);
       setInspection({ state: 'idle' });
       return;
     }
@@ -58,7 +64,9 @@ export default function FirmwareUpload({ onPublished }: { onPublished: () => voi
     try {
       // latin1 maps every byte to one code unit, so byte offsets survive and
       // no sequence is dropped as invalid the way utf-8 decoding would.
-      const text = new TextDecoder('latin1').decode(await file.arrayBuffer());
+      const bytes = await file.arrayBuffer();
+      setFileBytes(bytes);
+      const text = new TextDecoder('latin1').decode(bytes);
       const found = [...text.matchAll(BUILD_TAG)];
 
       if (found.length === 1) {
@@ -72,9 +80,49 @@ export default function FirmwareUpload({ onPublished }: { onPublished: () => voi
         setInspection({ state: 'absent', reason: '這個檔案沒有版本標記。' });
       }
     } catch {
+      setFileBytes(null);
       setInspection({ state: 'absent', reason: '讀不到這個檔案的內容。' });
     }
   }
+
+  async function handleKeyChange(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0] ?? null;
+    setKeyError(null);
+    setSignature('');
+    if (!file) {
+      setSigningKey(null);
+      setKeyName('');
+      return;
+    }
+    try {
+      setSigningKey(await importPrivateKey(await file.text()));
+      setKeyName(file.name);
+    } catch (e) {
+      setSigningKey(null);
+      setKeyName('');
+      setKeyError(e instanceof Error ? e.message : '讀不到這個私鑰。');
+    }
+  }
+
+  // Signing is driven by what the signature covers rather than by the moment a
+  // file is picked. Model and version are part of the manifest and are still
+  // editable for an image that does not name itself, so a signature produced
+  // when the file arrived would be stale by the time it is sent.
+  useEffect(() => {
+    if (!signingKey || !fileBytes || !model || !version) return;
+    let current = true;
+    (async () => {
+      try {
+        const sig = await signManifest(signingKey, model, version, await sha256Hex(fileBytes));
+        if (current) setSignature(sig);
+      } catch (e) {
+        if (current) setKeyError(e instanceof Error ? e.message : '簽章失敗。');
+      }
+    })();
+    return () => {
+      current = false;
+    };
+  }, [signingKey, fileBytes, model, version]);
 
   async function handleSubmit(event: React.SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -117,6 +165,7 @@ export default function FirmwareUpload({ onPublished }: { onPublished: () => voi
       setNotice({ text: published ? `韌體已發布：${published}。` : '韌體已發布。', ok: true });
       form.reset();
       setSelectedFileName('');
+      setFileBytes(null);
       setModel('');
       setVersion('');
       setSignature('');
@@ -139,6 +188,34 @@ export default function FirmwareUpload({ onPublished }: { onPublished: () => voi
           <p className="text-xs text-secondary">
             上傳前先在自己的機器上簽名，伺服器只驗章不簽章。驗過之後，你自己的同型號裝置會在下一次回報時取得這個版本。
           </p>
+        </div>
+        {/* Outside the form, and that is the point. Inside it, the private
+            key would stay out of the upload only because the input carries no
+            `name`, which is one attribute between a signing key and the wire.
+            Here there is no arrangement of attributes that could send it. */}
+        <div className="form-group signing-key">
+          <label className="form-label" htmlFor="signing-key">簽章私鑰</label>
+          <input
+            id="signing-key"
+            type="file"
+            className="form-input"
+            accept=".pem,.key"
+            onChange={handleKeyChange}
+          />
+          <span className="form-help">
+            選了之後，下面的簽章會在這個瀏覽器分頁裡算好。私鑰不會上傳，也不會離開這台機器。
+            習慣用終端機的話可以不選，自己跑{' '}
+            <code className="font-mono">sign_firmware.py</code> 再把結果貼到簽章欄。
+          </span>
+          {keyName && !keyError && (
+            <span className="form-help font-mono">已載入 {keyName}</span>
+          )}
+          {keyError && (
+            <div className="alert alert-error">
+              <span className="alert-title">私鑰讀取失敗：</span>
+              {keyError}
+            </div>
+          )}
         </div>
 
         <form ref={formRef} onSubmit={handleSubmit}>
@@ -236,14 +313,16 @@ export default function FirmwareUpload({ onPublished }: { onPublished: () => voi
               name="signature"
               className="form-input font-mono"
               rows={3}
-              placeholder="貼上 sign_firmware.py 印出來的那一段"
+              placeholder={signingKey ? '選好映像檔就會自動填' : '貼上 sign_firmware.py 印出來的那一段'}
               value={signature}
               onChange={event => setSignature(event.target.value)}
               style={{ resize: 'vertical' }}
               required
             />
             <span className="form-help">
-              自己跑 sign_firmware.py 產生。換檔案的話要重簽：簽章綁的是這個檔案的雜湊。
+              {signingKey
+                ? '用上面那把私鑰在這個分頁裡簽的。換檔案或改版號都會重簽：簽章綁的是這三樣東西。'
+                : '沒有選私鑰的話，自己跑 sign_firmware.py 產生。換檔案的話要重簽：簽章綁的是這個檔案的雜湊。'}
             </span>
           </div>
 

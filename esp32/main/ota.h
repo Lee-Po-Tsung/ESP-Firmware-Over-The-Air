@@ -5,7 +5,7 @@
 // What this build reports and publishes under. Declared here rather than in
 // ota.cpp so the sketch prints the same value it sends, instead of a second
 // copy someone has to remember to edit.
-#define FIRMWARE_VERSION "1.0.4"
+#define FIRMWARE_VERSION "1.0.6"
 #define DEVICE_MODEL "ESP32"
 
 // How long loop() waits before calling check() again. The device sends this
