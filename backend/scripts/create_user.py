@@ -1,10 +1,17 @@
 """Create a dashboard account from the command line.
 
-Solves the bootstrap problem: the first admin cannot be made through the
-admin-only paths, so seed it here. Also handy for scripted operator accounts.
+    uv run python backend/scripts/create_user.py --email bob@example.com
+    uv run python backend/scripts/create_user.py --email bob@example.com \
+        --public-key backend/keys/public_key.pem
 
-    uv run python backend/scripts/create_user.py --username admin --role admin
-    uv run python backend/scripts/create_user.py --username bob      # operator
+Signup is open, so this is no longer the only door. It stays for seeding: a
+fresh install, a test fixture and a CI run all want an account without driving
+a browser, and `frontend/e2e/backend.sh` is built on it.
+
+It goes through the same `UserManager.create` the register route uses, which is
+the point of it being written this way. The script once carried its own
+shortcut past the credential checks, and `--username ""` seeded a usable admin
+because of it. Anything that becomes an account passes the same door.
 
 The password is read interactively (or from the OTA_USER_PASSWORD env var for
 non-interactive use) so it never lands in shell history.
@@ -13,6 +20,7 @@ non-interactive use) so it never lands in shell history.
 from __future__ import annotations
 
 import argparse
+import asyncio
 import getpass
 import os
 import sys
@@ -20,39 +28,72 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from application.auth import RegisterUser, RegisterUserRequest  # noqa: E402
-from domain.auth import InvalidCredentialFormat  # noqa: E402
-from domain.models import Role  # noqa: E402
+from api.auth import UserCreate, UserManager  # noqa: E402
+from application.session import Session  # noqa: E402
+from config import get_settings  # noqa: E402
+from domain.signing import InvalidPublicKey, load_public_key  # noqa: E402
+from fastapi_users.exceptions import InvalidPasswordException, UserAlreadyExists  # noqa: E402
 from infrastructure.db import SessionLocal  # noqa: E402
-from infrastructure.sqlite_repo import SqliteUserRepository  # noqa: E402
-from ports.repository import UserAlreadyExists  # noqa: E402
+from infrastructure.sqlite_repo import (  # noqa: E402
+    SqliteRefreshTokenRepository,
+    SqliteUserRepository,
+)
+from infrastructure.user_db import SyncUserDatabase  # noqa: E402
+from pydantic import ValidationError  # noqa: E402
+
+
+async def _create(email: str, password: str, public_key: str | None) -> str:
+    settings = get_settings()
+    db = SessionLocal()
+    try:
+        users = SqliteUserRepository(db)
+        session = Session(SqliteRefreshTokenRepository(db), users, settings.refresh_expires_days)
+        manager = UserManager(SyncUserDatabase(users), session, settings.jwt_secret)
+        user = await manager.create(UserCreate(email=email, password=password))
+        if public_key is not None:
+            # Through the same normalizer the route uses, so a key seeded here
+            # is stored in the form an upload will be verified against.
+            user_db = SyncUserDatabase(users)
+            user = await user_db.update(user, {"public_key": load_public_key(public_key)})
+        return f"Created '{user.email}' (id={user.id})."
+    finally:
+        db.close()
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Create a dashboard user.")
-    parser.add_argument("--username", required=True)
-    parser.add_argument("--role", choices=[r.value for r in Role], default=Role.OPERATOR.value)
+    parser.add_argument("--email", required=True)
+    parser.add_argument(
+        "--public-key",
+        type=Path,
+        help="PEM file whose key this account's uploads are verified against",
+    )
     args = parser.parse_args()
 
     password = os.environ.get("OTA_USER_PASSWORD") or getpass.getpass("Password: ")
 
-    session = SessionLocal()
-    try:
-        use_case = RegisterUser(SqliteUserRepository(session))
+    public_key = None
+    if args.public_key is not None:
         try:
-            user = use_case.execute(
-                RegisterUserRequest(username=args.username, password=password, role=Role(args.role))
-            )
-        except InvalidCredentialFormat as exc:
-            print(str(exc).capitalize() + ".", file=sys.stderr)
+            public_key = args.public_key.read_text()
+        except OSError as exc:
+            print(f"Cannot read {args.public_key}: {exc}", file=sys.stderr)
             return 1
-        except UserAlreadyExists:
-            print(f"User '{args.username}' already exists.", file=sys.stderr)
-            return 1
-    finally:
-        session.close()
 
-    print(f"Created {user.role.value} '{user.username}' (id={user.id}).")
+    try:
+        print(asyncio.run(_create(args.email, password, public_key)))
+    except InvalidPublicKey as exc:
+        print(f"{args.public_key} is not usable: {exc}", file=sys.stderr)
+        return 1
+    except ValidationError:
+        print(f"'{args.email}' is not a valid email address.", file=sys.stderr)
+        return 1
+    except InvalidPasswordException as exc:
+        print(str(exc.reason).capitalize() + ".", file=sys.stderr)
+        return 1
+    except UserAlreadyExists:
+        print(f"An account for '{args.email}' already exists.", file=sys.stderr)
+        return 1
     return 0
 
 

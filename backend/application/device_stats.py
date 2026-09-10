@@ -19,8 +19,8 @@ class DeviceStats:
         self._devices = devices
         self._firmware = firmware
 
-    def execute(self) -> fleet.FleetStats:
-        devices = self._devices.list_all()
+    def execute(self, owner_id: int) -> fleet.FleetStats:
+        devices = self._devices.list_all(owner_id)
 
         # Looked up per model rather than off a full firmware list, so the
         # answer comes from the same `get_latest_for_model` a check-in gets,
@@ -28,7 +28,7 @@ class DeviceStats:
         # not something any device counts as behind.
         latest_versions: dict[str, str | None] = {}
         for model in {d.model for d in devices}:
-            latest = self._firmware.get_latest_for_model(model)
+            latest = self._firmware.get_latest_for_model(model, owner_id)
             latest_versions[model] = latest.version if latest else None
 
         # One clock reading for the whole tally, matching `GET /api/devices`.

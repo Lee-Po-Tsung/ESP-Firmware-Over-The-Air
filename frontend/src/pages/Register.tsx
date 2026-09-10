@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router';
 import { useAuth } from '../auth/context';
 import './Login.css';
 
-export default function Login() {
+export default function Register() {
   const { login } = useAuth();
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
@@ -17,6 +17,26 @@ export default function Login() {
     setError(null);
 
     try {
+      const res = await fetch('/backend/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      });
+
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        const detail = body?.detail;
+        // The register route answers 400 for two different things: the address
+        // is taken, and the password was refused. Only the second nests a
+        // reason, and the first is a bare code rather than a sentence.
+        if (detail === 'REGISTER_USER_ALREADY_EXISTS') {
+          throw new Error('這個電子郵件已經有帳號了。');
+        }
+        throw new Error(detail?.reason ?? `註冊失敗（HTTP ${res.status}）`);
+      }
+
+      // Straight in. The account is usable the moment it exists, and making
+      // someone retype what they just typed buys nothing.
       await login(email, password);
       navigate('/');
     } catch (e) {
@@ -38,9 +58,9 @@ export default function Login() {
 
       <div className="card login-card">
         <div className="login-header">
-          <h1 className="text-xl font-bold text-primary">登入控制台</h1>
+          <h1 className="text-xl font-bold text-primary">建立帳號</h1>
           <p className="text-sm text-secondary">
-            用你的工作帳號登入，即可管理韌體版本並查看所有裝置的即時狀態。
+            新帳號一開始是空的。你只會看到自己上傳的韌體和自己註冊的裝置。
           </p>
         </div>
 
@@ -58,35 +78,38 @@ export default function Login() {
           </div>
 
           <div className="form-group">
-            <div className="login-password-label">
-              <label className="form-label">密碼</label>
-              <Link to="/forgot-password" className="login-forgot text-xs">忘記密碼？</Link>
-            </div>
+            <label className="form-label">密碼</label>
             <input
               type="password"
               className="form-input"
               value={password}
               onChange={e => setPassword(e.target.value)}
-              autoComplete="current-password"
+              autoComplete="new-password"
               required
             />
+            <span className="form-help">至少 8 個字元。</span>
           </div>
 
           {error && (
             <div className="alert alert-error">
-              <span className="alert-title">登入失敗：</span>
+              <span className="alert-title">註冊失敗：</span>
               {error}
             </div>
           )}
 
-          <button type="submit" className="btn btn-primary" style={{ width: '100%', marginTop: '0.5rem', padding: '0.8rem' }} disabled={submitting}>
-            登入
+          <button
+            type="submit"
+            className="btn btn-primary"
+            style={{ width: '100%', marginTop: '0.5rem', padding: '0.8rem' }}
+            disabled={submitting}
+          >
+            建立帳號
           </button>
         </form>
       </div>
 
       <p className="login-footer text-xs text-secondary">
-        還沒有帳號？<Link to="/register">建立一個</Link>
+        已經有帳號了？<Link to="/login">直接登入</Link>
       </p>
     </div>
   );

@@ -149,3 +149,58 @@
   padding: 2rem 1.25rem;
   text-align: center;
 }
+
+/* Registration sits above the table rather than behind a modal: it is the
+first thing a new account has to do, and an empty fleet has nothing else on
+this page to look at. */
+.dev-register-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  padding: var(--space-lg);
+  margin-bottom: var(--space-lg);
+}
+
+.dev-register-header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.dev-register-form {
+  display: flex;
+  gap: var(--space-sm);
+  align-items: center;
+}
+
+.dev-register-form .form-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.dev-new-device {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-sm);
+}
+
+/* Wraps rather than scrolls: this is meant to be selected and copied, and a
+value half of which is off-screen is a value someone copies half of. */
+.dev-secret-block {
+  width: 100%;
+  margin: 0;
+  padding: var(--space-sm);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm);
+  background: var(--bg-subtle);
+  color: var(--text-primary);
+  white-space: pre-wrap;
+  word-break: break-all;
+  user-select: all;
+}
+
+.dev-col-actions {
+  white-space: nowrap;
+  text-align: right;
+}

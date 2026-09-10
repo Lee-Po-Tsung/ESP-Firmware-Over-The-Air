@@ -1,10 +1,20 @@
-"""Generate the RSA key pair used to sign firmware manifests.
-
-Writes a 2048-bit private key and its public key under `backend/keys/`, unless
-they already exist. The public key is what you embed in each ESP32's config so
-the device can verify what it downloads. Run once before starting the server:
+"""Generate the RSA key pair an uploader signs firmware with.
 
     uv run python backend/scripts/generate_keys.py
+
+Writes a 2048-bit private key and its public key under `backend/keys/`, unless
+they already exist. This is a key pair for whoever publishes firmware, not for
+the server: the server holds no private key at all, and verifies uploads
+against the public half stored on the account.
+
+Two places the public key goes, and both are needed:
+
+The account holds it, through the dashboard or `create_user.py --public-key`,
+which is what lets an upload be accepted. Each device's `config.json` holds it
+too, which is what lets the download be trusted once it lands.
+
+The private key stays here. Losing it means publishing nothing more under this
+key; leaking it means somebody else can publish firmware the fleet accepts.
 """
 
 from __future__ import annotations
@@ -44,7 +54,8 @@ def main() -> int:
     )
     print(f"Wrote {settings.private_key_path}")
     print(f"Wrote {settings.public_key_path}")
-    print("\nEmbed the public key in each device's config so it can verify firmware.")
+    print("\nPut the public key on your account and in each device's config.json.")
+    print("Sign an image with: uv run python backend/scripts/sign_firmware.py <image.bin>")
     return 0
 
 

@@ -1,73 +1,59 @@
-"""Unit tests for the password hashing and access-token primitives."""
+"""Unit tests for the credential rules the domain still owns.
+
+Hashing and access-token signing moved to fastapi-users and are not retested
+here: what is left is the part this project decides, and the part both doors
+onto account creation have to agree on.
+"""
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
-
 import pytest
 from domain import auth
-from domain.models import Role
-
-# 32+ bytes each, matching RFC 7518's minimum HMAC key length for HS256.
-SECRET = "unit-test-secret-0123456789abcdef"
-WRONG_SECRET = "another-secret-0123456789abcdef!"
-
-
-def test_hash_password_is_verifiable_and_not_plaintext():
-    hashed = auth.hash_password("hunter2")
-
-    assert hashed != "hunter2"
-    assert auth.verify_password("hunter2", hashed)
-    assert not auth.verify_password("wrong", hashed)
-
-
-def test_verify_password_reports_mismatch_for_overlong_input():
-    # bcrypt raises past 72 bytes; a login attempt must get False, not a 500.
-    hashed = auth.hash_password("hunter2")
-
-    assert not auth.verify_password("x" * (auth.MAX_PASSWORD_BYTES + 1), hashed)
-
-
-def test_access_token_round_trips_id_and_role():
-    token = auth.create_access_token(7, Role.ADMIN, secret=SECRET, expires_minutes=60)
-
-    user_id, role = auth.decode_access_token(token, SECRET)
-
-    assert user_id == 7
-    assert role is Role.ADMIN
-
-
-def test_decode_rejects_wrong_secret():
-    token = auth.create_access_token(1, Role.OPERATOR, secret=SECRET, expires_minutes=60)
-
-    with pytest.raises(auth.InvalidToken):
-        auth.decode_access_token(token, WRONG_SECRET)
-
-
-def test_decode_rejects_expired_token():
-    past = datetime(2020, 1, 1, tzinfo=timezone.utc)
-    token = auth.create_access_token(1, Role.ADMIN, secret=SECRET, expires_minutes=1, now=past)
-
-    with pytest.raises(auth.InvalidToken):
-        auth.decode_access_token(token, SECRET)
-
-
-def test_decode_rejects_garbage():
-    with pytest.raises(auth.InvalidToken):
-        auth.decode_access_token("not-a-jwt", SECRET)
 
 
 @pytest.mark.parametrize(
-    ("username", "password"),
-    [("", "long-enough"), ("bob", "short"), ("bob", "x" * 73)],
-    ids=["empty-username", "short-password", "over-bcrypt-limit"],
+    ("written", "stored"),
+    [
+        ("Foo@Example.com", "foo@example.com"),
+        ("  foo@example.com  ", "foo@example.com"),
+        ("FOO@EXAMPLE.COM", "foo@example.com"),
+    ],
+    ids=["mixed-case", "surrounding-space", "shouting"],
 )
-def test_validate_credentials_rejects(username, password):
-    # The empty username is the one `scripts/create_user.py` used to let
-    # through, which mattered because the script is how admins are made.
+def test_normalize_email_collapses_spellings_of_one_address(written, stored):
+    assert auth.normalize_email(written) == stored
+
+
+def test_normalize_email_is_idempotent():
+    # Applied on write and again on read, so a second pass must not move it.
+    once = auth.normalize_email("  Bob@Example.COM ")
+
+    assert auth.normalize_email(once) == once
+
+
+@pytest.mark.parametrize(
+    "password",
+    ["", "short", "x" * (auth.MAX_PASSWORD_BYTES + 1)],
+    ids=["empty", "too-short", "past-the-ceiling"],
+)
+def test_validate_password_rejects(password):
     with pytest.raises(auth.InvalidCredentialFormat):
-        auth.validate_credentials(username, password)
+        auth.validate_password(password)
 
 
-def test_validate_credentials_accepts_a_usable_pair():
-    auth.validate_credentials("bob", "long-enough")
+def test_validate_password_measures_the_ceiling_in_bytes_not_characters():
+    """A multi-byte password is longer than it looks.
+
+    The ceiling exists to bound argon2's memory cost, which scales with the
+    bytes it is handed, so counting characters would let a password four times
+    the intended size through.
+    """
+    just_over = "一" * (auth.MAX_PASSWORD_BYTES // 3 + 1)
+
+    assert len(just_over) < auth.MAX_PASSWORD_BYTES
+    with pytest.raises(auth.InvalidCredentialFormat):
+        auth.validate_password(just_over)
+
+
+def test_validate_password_accepts_a_usable_one():
+    auth.validate_password("long-enough-pw")

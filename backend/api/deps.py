@@ -1,42 +1,44 @@
 """Assembles what the route handlers need and exposes it as FastAPI dependencies.
 
-Opens a database session per request, builds the repositories, storage and use
-cases on top of it, and resolves the bearer token into the current account so
-write endpoints can be gated by role.
+Opens a database session per request and builds the repositories, storage and
+use cases on top of it. Resolving a bearer token into an account is not here:
+that is fastapi-users' job and lives in `api/auth.py`, which depends on this
+module for the account store. Nothing here may import it back.
 """
 
 from __future__ import annotations
 
 from collections.abc import Iterator
 
-from application.auth import AuthenticateUser
 from application.check_update import CheckUpdate
 from application.deactivate_firmware import DeactivateFirmware
 from application.device_stats import DeviceStats
+from application.register_device import RegisterDevice, SetDeviceEnabled
+from application.session import Session as UserSession
 from application.upload_firmware import UploadFirmware
 from config import Settings, get_settings
-from domain import auth
-from domain.models import Role, User
-from fastapi import Depends, HTTPException, status
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from domain.models import User
+from fastapi import Depends
+from fastapi_users.db import BaseUserDatabase
 from infrastructure.db import SessionLocal
 from infrastructure.local_storage import LocalStorage
 from infrastructure.sqlite_repo import (
     SqliteDeviceEventRepository,
     SqliteDeviceRepository,
     SqliteFirmwareRepository,
+    SqliteRefreshTokenRepository,
     SqliteUserRepository,
 )
+from infrastructure.user_db import SyncUserDatabase
 from ports.repository import (
     DeviceEventRepository,
     DeviceRepository,
     FirmwareRepository,
+    RefreshTokenRepository,
     UserRepository,
 )
 from ports.storage import StorageBackend
 from sqlalchemy.orm import Session
-
-bearer_scheme = HTTPBearer(auto_error=False)
 
 
 def get_db() -> Iterator[Session]:
@@ -53,6 +55,24 @@ def get_firmware_repository(db: Session = Depends(get_db)) -> FirmwareRepository
 
 def get_user_repository(db: Session = Depends(get_db)) -> UserRepository:
     return SqliteUserRepository(db)
+
+
+def get_refresh_token_repository(db: Session = Depends(get_db)) -> RefreshTokenRepository:
+    return SqliteRefreshTokenRepository(db)
+
+
+def get_user_db(
+    repo: UserRepository = Depends(get_user_repository),
+) -> BaseUserDatabase[User, int]:
+    return SyncUserDatabase(repo)
+
+
+def get_session(
+    tokens: RefreshTokenRepository = Depends(get_refresh_token_repository),
+    users: UserRepository = Depends(get_user_repository),
+    settings: Settings = Depends(get_settings),
+) -> UserSession:
+    return UserSession(tokens, users, settings.refresh_expires_days)
 
 
 def get_device_repository(db: Session = Depends(get_db)) -> DeviceRepository:
@@ -75,6 +95,18 @@ def get_check_update(
     return CheckUpdate(repo, devices, events)
 
 
+def get_register_device(
+    devices: DeviceRepository = Depends(get_device_repository),
+) -> RegisterDevice:
+    return RegisterDevice(devices)
+
+
+def get_set_device_enabled(
+    devices: DeviceRepository = Depends(get_device_repository),
+) -> SetDeviceEnabled:
+    return SetDeviceEnabled(devices)
+
+
 def get_device_stats(
     devices: DeviceRepository = Depends(get_device_repository),
     firmware: FirmwareRepository = Depends(get_firmware_repository),
@@ -85,60 +117,11 @@ def get_device_stats(
 def get_upload_firmware(
     repo: FirmwareRepository = Depends(get_firmware_repository),
     storage: StorageBackend = Depends(get_storage),
-    settings: Settings = Depends(get_settings),
 ) -> UploadFirmware:
-    return UploadFirmware(repo, storage, settings.read_private_key())
+    return UploadFirmware(repo, storage)
 
 
 def get_deactivate_firmware(
     repo: FirmwareRepository = Depends(get_firmware_repository),
 ) -> DeactivateFirmware:
     return DeactivateFirmware(repo)
-
-
-def get_authenticate_user(
-    repo: UserRepository = Depends(get_user_repository),
-    settings: Settings = Depends(get_settings),
-) -> AuthenticateUser:
-    return AuthenticateUser(repo, settings.jwt_secret, settings.jwt_expires_minutes)
-
-
-def get_current_user(
-    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
-    repo: UserRepository = Depends(get_user_repository),
-    settings: Settings = Depends(get_settings),
-) -> User:
-    """Resolve the bearer token into the account it belongs to.
-
-    Rejects a missing, malformed, or expired token, and a token whose account no
-    longer exists, all as 401.
-    """
-    if credentials is None:
-        raise _unauthorized("Missing bearer token")
-    try:
-        user_id, _role = auth.decode_access_token(credentials.credentials, settings.jwt_secret)
-    except auth.InvalidToken as exc:
-        raise _unauthorized("Invalid or expired token") from exc
-
-    user = repo.get_by_id(user_id)
-    if user is None:
-        raise _unauthorized("Account no longer exists")
-    return user
-
-
-def require_admin(user: User = Depends(get_current_user)) -> User:
-    """Gate write endpoints behind an admin account."""
-    if user.role is not Role.ADMIN:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Admin role required",
-        )
-    return user
-
-
-def _unauthorized(detail: str) -> HTTPException:
-    return HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail=detail,
-        headers={"WWW-Authenticate": "Bearer"},
-    )

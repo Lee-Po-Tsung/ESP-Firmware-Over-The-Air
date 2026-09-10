@@ -20,7 +20,7 @@ type Inspection =
   | { state: 'absent'; reason: string };
 
 export default function FirmwareUpload({ onPublished }: { onPublished: () => void }) {
-  const { session } = useAuth();
+  const { session, authFetch } = useAuth();
   const formRef = useRef<HTMLFormElement>(null);
   const [submitting, setSubmitting] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
@@ -28,8 +28,10 @@ export default function FirmwareUpload({ onPublished }: { onPublished: () => voi
   const [inspection, setInspection] = useState<Inspection>({ state: 'idle' });
   const [model, setModel] = useState('');
   const [version, setVersion] = useState('');
+  const [signature, setSignature] = useState('');
 
   const identified = inspection.state === 'found';
+  const canPublish = session?.account.hasPublicKey ?? false;
 
   // Read the image as soon as it is picked, before anything else is filled in.
   // Both fields are cleared first: an image that names itself overwrites them,
@@ -41,6 +43,11 @@ export default function FirmwareUpload({ onPublished }: { onPublished: () => voi
     setNotice(null);
     setModel('');
     setVersion('');
+    // The signature covers a hash of one exact file. Keeping the old one here
+    // would let a signature for the previous pick ride along with this one,
+    // and the only thing that would catch it is the server rejecting an upload
+    // whose message is about the signature rather than about the swap.
+    setSignature('');
 
     if (!file) {
       setInspection({ state: 'idle' });
@@ -81,18 +88,13 @@ export default function FirmwareUpload({ onPublished }: { onPublished: () => voi
     setNotice(null);
 
     try {
-      const res = await fetch('/backend/firmware/upload', {
+      const res = await authFetch('/backend/firmware/upload', {
         method: 'POST',
-        headers: session ? { Authorization: `Bearer ${session.token}` } : undefined,
         body: new FormData(form),
       });
 
       if (res.status === 401) {
         setNotice({ text: '登入階段已過期，請重新登入。', ok: false });
-        return;
-      }
-      if (res.status === 403) {
-        setNotice({ text: '只有管理員帳號可以發布韌體。', ok: false });
         return;
       }
       // Several distinct causes share these codes, and the backend already
@@ -117,6 +119,7 @@ export default function FirmwareUpload({ onPublished }: { onPublished: () => voi
       setSelectedFileName('');
       setModel('');
       setVersion('');
+      setSignature('');
       setInspection({ state: 'idle' });
       // The list is fetched once when the session appears, so without this the
       // version just published is missing from it until the page is reloaded.
@@ -133,8 +136,11 @@ export default function FirmwareUpload({ onPublished }: { onPublished: () => voi
       <div className="card upload-card">
         <div className="upload-header">
           <h1 className="text-xl font-bold text-primary">發布韌體</h1>
-          <p className="text-xs text-secondary">上傳後由伺服器簽署。同型號的裝置會在下一次回報時取得這個版本。</p>
+          <p className="text-xs text-secondary">
+            上傳前先在自己的機器上簽名，伺服器只驗章不簽章。驗過之後，你自己的同型號裝置會在下一次回報時取得這個版本。
+          </p>
         </div>
+
         <form ref={formRef} onSubmit={handleSubmit}>
           <div className="form-group">
             <label className="form-label" htmlFor="firmware-file">韌體映像檔（.bin）</label>
@@ -224,6 +230,24 @@ export default function FirmwareUpload({ onPublished }: { onPublished: () => voi
           </div>
 
           <div className="form-group">
+            <label className="form-label" htmlFor="firmware-signature">簽章</label>
+            <textarea
+              id="firmware-signature"
+              name="signature"
+              className="form-input font-mono"
+              rows={3}
+              placeholder="貼上 sign_firmware.py 印出來的那一段"
+              value={signature}
+              onChange={event => setSignature(event.target.value)}
+              style={{ resize: 'vertical' }}
+              required
+            />
+            <span className="form-help">
+              自己跑 sign_firmware.py 產生。換檔案的話要重簽：簽章綁的是這個檔案的雜湊。
+            </span>
+          </div>
+
+          <div className="form-group">
             <label className="form-label" htmlFor="firmware-notes">版本說明</label>
             <textarea
               id="firmware-notes"
@@ -241,8 +265,8 @@ export default function FirmwareUpload({ onPublished }: { onPublished: () => voi
             </div>
           )}
 
-          <button type="submit" className="btn btn-primary" style={{ width: '100%', marginTop: '0.9rem', padding: '0.82rem' }} disabled={submitting || inspection.state === 'checking'}>
-            {inspection.state === 'checking' ? '讀取映像檔中...' : submitting ? '上傳中...' : '上傳並發布'}
+          <button type="submit" className="btn btn-primary" style={{ width: '100%', marginTop: '0.9rem', padding: '0.82rem' }} disabled={submitting || inspection.state === 'checking' || !canPublish}>
+            {inspection.state === 'checking' ? '讀取映像檔中...' : submitting ? '上傳中...' : !canPublish ? '要先設定簽章公鑰' : '上傳並發布'}
           </button>
         </form>
       </div>

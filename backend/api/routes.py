@@ -5,8 +5,10 @@ Device protocol:
 - `POST /api/check`
 - `GET /api/download/{id}`
 
-plus `POST /firmware/upload` for the admin frontend to publish signed firmware
-and `GET /api/devices` for the dashboard device page.
+plus `POST /firmware/upload` for the dashboard to publish signed firmware and
+`GET /api/devices` for its device page. Every dashboard route answers within
+one account: the repositories take the account asking, so a handler that
+forgot to pass it would not compile rather than serve someone else's rows.
 Each handler reads the request, calls a use case, and returns a domain object;
 the `response_model` on the route decides which fields reach the wire. Field
 names and status codes follow what the ESP32 firmware in `esp32/main/ota.cpp`
@@ -18,19 +20,29 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from urllib.parse import quote
 
-from application.auth import AuthenticateUser, InvalidCredentials
-from application.check_update import CheckUpdate, CheckUpdateRequest, ModelNotFound
+from application.check_update import (
+    CheckUpdate,
+    CheckUpdateRequest,
+    ModelNotFound,
+    UnknownDevice,
+)
 from application.deactivate_firmware import DeactivateFirmware
 from application.device_stats import DeviceStats
+from application.register_device import (
+    DeviceNotFound,
+    RegisterDevice,
+    SetDeviceEnabled,
+)
 from application.upload_firmware import (
     InvalidUploadIdentity,
+    NoPublicKey,
     UploadFirmware,
     UploadFirmwareRequest,
 )
 from domain import fleet
 from domain.firmware_image import MAX_FIRMWARE_BYTES, InvalidFirmwareImage
-from domain.models import DeviceEvent, EventType
-from domain.signing import InvalidManifestField
+from domain.models import DeviceEvent, EventType, User
+from domain.signing import InvalidManifestField, SignatureRejected
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, status
 from fastapi.responses import Response, StreamingResponse
 from ports.repository import (
@@ -44,18 +56,18 @@ from ports.repository import (
 from ports.storage import CHUNK_SIZE, StorageBackend
 from pydantic import BaseModel, ConfigDict, Field
 
+from api.auth import current_active_user
 from api.deps import (
-    get_authenticate_user,
     get_check_update,
-    get_current_user,
     get_deactivate_firmware,
     get_device_event_repository,
     get_device_repository,
     get_device_stats,
     get_firmware_repository,
+    get_register_device,
+    get_set_device_enabled,
     get_storage,
     get_upload_firmware,
-    require_admin,
 )
 
 router = APIRouter()
@@ -73,52 +85,27 @@ class _FromDomain(BaseModel):
 
 
 """
-Auth
-"""
-
-
-class LoginRequest(BaseModel):
-    username: str
-    password: str
-
-
-class TokenResponse(BaseModel):
-    access_token: str
-    token_type: str = "bearer"
-
-
-@router.post("/api/auth/login")
-def login(
-    body: LoginRequest,
-    use_case: AuthenticateUser = Depends(get_authenticate_user),
-) -> TokenResponse:
-    try:
-        token = use_case.execute(body.username, body.password)
-    except InvalidCredentials as exc:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid username or password",
-            headers={"WWW-Authenticate": "Bearer"},
-        ) from exc
-    return TokenResponse(access_token=token)
-
-
-"""
 Device protocol
 """
 
 
 class CheckRequest(BaseModel):
-    """What `ota.cpp:check()` sends. Only `model` and `version` steer the answer.
+    """What `ota.cpp:check()` sends.
 
-    The telemetry is required rather than optional: there is one device, it is
-    reflashed alongside the server, and a field that silently stopped arriving
-    would surface as a null column on the dashboard instead of a 422 here.
+    `device_id` and `device_secret` come out of that unit's `config.json` and
+    are what the server identifies the caller by. Both are required: there is
+    no anonymous check-in any more, because an answer needs an account to look
+    the firmware up in.
+
+    The telemetry is required rather than optional for a different reason: a
+    field that silently stopped arriving would surface as a null column on the
+    dashboard instead of a 422 here.
     """
 
     model: str
     version: str
-    device_id: str | None = None
+    device_id: str
+    device_secret: str
     poll_interval_seconds: int
     rssi: int
     ip: str
@@ -155,6 +142,7 @@ def check_update(
                 model=body.model,
                 version=body.version,
                 device_id=body.device_id,
+                device_secret=body.device_secret,
                 poll_interval_seconds=body.poll_interval_seconds,
                 rssi=body.rssi,
                 ip=body.ip,
@@ -162,6 +150,13 @@ def check_update(
                 failed_attempts=body.failed_attempts,
             )
         )
+    except UnknownDevice as exc:
+        # 401 and nothing else. Unregistered, wrong secret and disabled are one
+        # answer on purpose: three different ones would let a caller work out
+        # which device identifiers exist, and then which of them are live.
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Unknown device"
+        ) from exc
     except ModelNotFound as exc:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN) from exc
 
@@ -187,15 +182,18 @@ def _content_disposition(filename: str) -> str:
     return f"attachment; filename=\"{ascii_name}\"; filename*=UTF-8''{encoded}"
 
 
-@router.get("/api/download/{firmware_id}")
+# Unauthenticated, and it has to stay that way: `ota.cpp` holds no account
+# credential. The path segment is therefore the credential, which is why it is
+# a random string rather than the row's id. See `Firmware.download_id`.
+@router.get("/api/download/{download_id}")
 def download_firmware(
-    firmware_id: int,
+    download_id: str,
     device_id: str | None = None,
     repo: FirmwareRepository = Depends(get_firmware_repository),
     storage: StorageBackend = Depends(get_storage),
     events: DeviceEventRepository = Depends(get_device_event_repository),
 ) -> Response:
-    firmware = repo.get_by_id(firmware_id)
+    firmware = repo.get_by_download_id(download_id)
     if firmware is None or not storage.exists(firmware.filename):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
 
@@ -244,11 +242,12 @@ class FirmwareResponse(_FromDomain):
     created_at: datetime
 
 
-@router.get("/api/firmware/list", dependencies=[Depends(get_current_user)])
+@router.get("/api/firmware/list")
 def firmware_list_api(
+    user: User = Depends(current_active_user),
     repo: FirmwareRepository = Depends(get_firmware_repository),
 ) -> list[FirmwareResponse]:
-    return [FirmwareResponse.model_validate(f) for f in repo.list_all()]
+    return [FirmwareResponse.model_validate(f) for f in repo.list_all(user.id)]
 
 
 """
@@ -274,11 +273,13 @@ class DeviceResponse(BaseModel):
     ip: str | None
     last_error: str | None
     failed_attempts: int | None
+    enabled: bool
     online: bool | None
 
 
-@router.get("/api/devices", dependencies=[Depends(get_current_user)])
+@router.get("/api/devices")
 def device_list_api(
+    user: User = Depends(current_active_user),
     repo: DeviceRepository = Depends(get_device_repository),
 ) -> list[DeviceResponse]:
     # One clock reading for the whole list. Sampling per device would let two
@@ -296,10 +297,41 @@ def device_list_api(
             ip=d.ip,
             last_error=d.last_error,
             failed_attempts=d.failed_attempts,
+            enabled=d.enabled,
             online=fleet.is_online(d.last_seen, d.poll_interval_seconds, now),
         )
-        for d in repo.list_all()
+        for d in repo.list_all(user.id)
     ]
+
+
+class RegisterDeviceRequest(BaseModel):
+    model: str = Field(min_length=1, max_length=64)
+
+
+class RegisteredDeviceResponse(BaseModel):
+    """The only time the secret is ever sent anywhere.
+
+    The server keeps a SHA-256 of it and nothing else, so there is no route
+    that can show it again. Losing it means registering the unit afresh.
+    """
+
+    device_id: str
+    device_secret: str
+    model: str
+
+
+@router.post("/api/devices", status_code=status.HTTP_201_CREATED)
+def register_device(
+    body: RegisterDeviceRequest,
+    user: User = Depends(current_active_user),
+    use_case: RegisterDevice = Depends(get_register_device),
+) -> RegisteredDeviceResponse:
+    registered = use_case.execute(body.model, user.id)
+    return RegisteredDeviceResponse(
+        device_id=registered.device.device_id,
+        device_secret=registered.secret,
+        model=registered.device.model,
+    )
 
 
 class DeviceStatsResponse(BaseModel):
@@ -319,16 +351,63 @@ class DeviceStatsResponse(BaseModel):
 
 # Kept above any future `/api/devices/{device_id}`, which would otherwise
 # match "stats" and hand it to the handler as an id.
-@router.get("/api/devices/stats", dependencies=[Depends(get_current_user)])
+@router.get("/api/devices/stats")
 def device_stats_api(
+    user: User = Depends(current_active_user),
     use_case: DeviceStats = Depends(get_device_stats),
 ) -> DeviceStatsResponse:
-    return DeviceStatsResponse.model_validate(use_case.execute(), from_attributes=True)
+    return DeviceStatsResponse.model_validate(use_case.execute(user.id), from_attributes=True)
 
 
 """
 Admin firmware upload
 """
+
+
+def _set_enabled(
+    device_id: str, user: User, use_case: SetDeviceEnabled, enabled: bool
+) -> DeviceResponse:
+    try:
+        device = use_case.execute(device_id, user.id, enabled)
+    except DeviceNotFound as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND) from exc
+    # `online` is answered against the clock, and a device just switched off has
+    # not stopped reporting yet, so this says what is true right now rather than
+    # what the operator is about to see happen.
+    return DeviceResponse(
+        id=device.id,
+        device_id=device.device_id,
+        model=device.model,
+        current_version=device.current_version,
+        last_seen=device.last_seen,
+        poll_interval_seconds=device.poll_interval_seconds,
+        rssi=device.rssi,
+        ip=device.ip,
+        last_error=device.last_error,
+        failed_attempts=device.failed_attempts,
+        enabled=device.enabled,
+        online=fleet.is_online(
+            device.last_seen, device.poll_interval_seconds, datetime.now(timezone.utc)
+        ),
+    )
+
+
+@router.post("/api/devices/{device_id}/disable")
+def disable_device(
+    device_id: str,
+    user: User = Depends(current_active_user),
+    use_case: SetDeviceEnabled = Depends(get_set_device_enabled),
+) -> DeviceResponse:
+    return _set_enabled(device_id, user, use_case, False)
+
+
+@router.post("/api/devices/{device_id}/enable")
+def enable_device(
+    device_id: str,
+    user: User = Depends(current_active_user),
+    use_case: SetDeviceEnabled = Depends(get_set_device_enabled),
+) -> DeviceResponse:
+    return _set_enabled(device_id, user, use_case, True)
 
 
 class UploadResponse(BaseModel):
@@ -382,22 +461,29 @@ def _read_upload_capped(request: Request, upload: UploadFile) -> bytes:
     return b"".join(chunks)
 
 
-# Upload firmware require admin privilege
-@router.post("/firmware/upload", include_in_schema=False, dependencies=[Depends(require_admin)])
+@router.post("/firmware/upload", include_in_schema=False)
 def upload(
     request: Request,
+    user: User = Depends(current_active_user),
     firmware: UploadFile = File(...),
     # Optional because the image usually answers this. They are still read, and
     # a value that contradicts the image is refused rather than overwritten.
     model: str | None = Form(None),
     version: str | None = Form(None),
     notes: str | None = Form(None),
+    # Required, and the one field the image cannot answer for itself. The
+    # server holds no private key, so an upload with no signature is one
+    # nothing can vouch for rather than one the server signs on the way past.
+    signature: str = Form(...),
     use_case: UploadFirmware = Depends(get_upload_firmware),
 ) -> UploadResponse:
     data = _read_upload_capped(request, firmware)
     try:
         stored = use_case.execute(
             UploadFirmwareRequest(
+                owner_id=user.id,
+                owner_public_key=user.public_key,
+                signature=signature,
                 model=model,
                 version=version,
                 original_filename=firmware.filename or "firmware.bin",
@@ -405,7 +491,13 @@ def upload(
                 notes=notes,
             )
         )
-    except (InvalidManifestField, InvalidFirmwareImage, InvalidUploadIdentity) as exc:
+    except (
+        InvalidManifestField,
+        InvalidFirmwareImage,
+        InvalidUploadIdentity,
+        SignatureRejected,
+        NoPublicKey,
+    ) as exc:
         # The validator's message names the field that failed, so pass it
         # through rather than flattening every rejection into one string.
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
@@ -422,13 +514,14 @@ def upload(
     return UploadResponse(status="ok", model=stored.model, version=stored.version)
 
 
-@router.post("/api/firmware/{firmware_id}/deactivate", dependencies=[Depends(require_admin)])
+@router.post("/api/firmware/{firmware_id}/deactivate")
 def deactivate_firmware(
     firmware_id: int,
+    user: User = Depends(current_active_user),
     use_case: DeactivateFirmware = Depends(get_deactivate_firmware),
 ) -> FirmwareResponse:
     try:
-        firmware = use_case.execute(firmware_id)
+        firmware = use_case.execute(firmware_id, user.id)
     except FirmwareNotFound as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND) from exc
     return FirmwareResponse.model_validate(firmware)

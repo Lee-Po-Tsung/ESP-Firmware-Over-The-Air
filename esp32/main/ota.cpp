@@ -70,6 +70,18 @@ String last_error;
 String rootCACertificate;
 String rsaPublicKey;
 
+// This unit's registration, issued by the dashboard and written into its own
+// config.json. Per device rather than per account: config.json sits in
+// LittleFS in the clear, so one secret shared across a fleet would mean buying
+// the cheapest unit and dumping its flash yields the firmware for everything
+// that account ships. The cost is that each unit needs its own LittleFS image.
+//
+// It identifies and never authorizes. The server accepts it for check-in and
+// nothing else, so a secret pulled out of a teardown reads that unit's updates
+// and cannot publish or withdraw anything.
+String device_id;
+String device_secret;
+
 // Initialize and mount LittleFS
 bool initFS() {
     if (!LittleFS.begin(true)) {
@@ -357,9 +369,11 @@ bool loadConfig(String& ssid, String& password, String& identity, String& userna
     serverUrl = doc["server_url"].as<String>();
     rootCACertificate = doc["ca_cert"].as<String>();
     rsaPublicKey = doc["public_key"].as<String>();
+    device_id = doc["device_id"].as<String>();
+    device_secret = doc["device_secret"].as<String>();
 
     if (ssid.isEmpty() || serverUrl.isEmpty() || rootCACertificate.isEmpty() ||
-        rsaPublicKey.isEmpty()) {
+        rsaPublicKey.isEmpty() || device_id.isEmpty() || device_secret.isEmpty()) {
         Serial.println("Required config fields are missing or empty!");
         return false;
     }
@@ -367,6 +381,10 @@ bool loadConfig(String& ssid, String& password, String& identity, String& userna
     Serial.println("Config loaded successfully:");
     Serial.printf("SSID: %s\n", ssid.c_str());
     Serial.printf("Server URL: %s\n", serverUrl.c_str());
+    // The id, never the secret. Serial output is the one place this is read
+    // out loud, and printing the credential there is printing it into whatever
+    // log the operator pasted the boot output into.
+    Serial.printf("Device ID: %s\n", device_id.c_str());
     Serial.printf("WPA2 Enterprise: %s\n", useEnterprise ? "Yes" : "No");
     return true;
 }
@@ -400,7 +418,11 @@ bool check() {
     // the only moment the device speaks, so anything the server wants to show
     // has to ride along with it.
     JsonDocument req;
-    req["device_id"] = WiFi.macAddress();
+    // From config, not from the MAC address this used to send. The server
+    // issues the id at registration, so it names a unit somebody registered
+    // rather than one that merely exists on the network.
+    req["device_id"] = device_id;
+    req["device_secret"] = device_secret;
     req["model"] = DEVICE_MODEL;
     req["version"] = FIRMWARE_VERSION;
     req["poll_interval_seconds"] = POLL_INTERVAL_SECONDS;
@@ -420,7 +442,18 @@ bool check() {
 
     int code = https.POST(data);
     if (code != HTTP_CODE_OK) {
-        Serial.println("http connect error: " + String(code));
+        // 401 is its own line because it is the one failure the network cannot
+        // cause. It means the server has no live registration for this id and
+        // secret, which is a config.json problem: the unit was never
+        // registered, was registered again, or has been disabled from the
+        // dashboard. Nothing here retries out of it.
+        if (code == HTTP_CODE_UNAUTHORIZED) {
+            Serial.println(
+                "Server does not recognise this device. Check device_id and "
+                "device_secret in config.json, or whether it was disabled.");
+        } else {
+            Serial.println("http connect error: " + String(code));
+        }
         https.end();
         delClient();
         return false;

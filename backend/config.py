@@ -2,8 +2,13 @@
 
 Reads every adjustable path and secret from environment variables, with
 local-dev defaults. The SQLite database and uploaded firmware live under
-`backend/data/`; the signing keys live under `backend/keys/` (create them with
-`scripts/generate_keys.py`).
+`backend/data/`.
+
+There is no signing key here. Firmware is signed by whoever built it and the
+server only verifies, against the public key on the uploading account, so
+`backend/keys/` now holds nothing the server reads. `scripts/generate_keys.py`
+still writes a pair there because that is a convenient place for an uploader to
+keep one, and `KEYS_DIR` still says where.
 """
 
 from __future__ import annotations
@@ -40,6 +45,8 @@ class Settings:
         # `db_path` does, and the two are used together.
         self.database_url = os.environ.get("DATABASE_URL", f"sqlite:///{self.db_path}")
 
+        # Where `scripts/generate_keys.py` writes an uploader's pair. Read by
+        # the scripts, never by the server.
         self.keys_dir = Path(os.environ.get("KEYS_DIR", BACKEND_DIR / "keys"))
         self.private_key_path = Path(
             os.environ.get("PRIVATE_KEY_PATH", self.keys_dir / "private_key.pem")
@@ -49,6 +56,11 @@ class Settings:
         )
 
         self.jwt_expires_minutes = int(os.environ.get("JWT_EXPIRES_MINUTES", "60"))
+        # How long a session can go on being renewed. The access token above is
+        # what every request carries and stays short; this is the ceiling on
+        # the handle that replaces it, so a browser left open renews silently
+        # for a fortnight and then has to log in again.
+        self.refresh_expires_days = int(os.environ.get("REFRESH_EXPIRES_DAYS", "14"))
 
     @cached_property
     def jwt_secret(self) -> str:
@@ -62,15 +74,6 @@ class Settings:
         if len(secret.encode("utf-8")) < 32:
             raise RuntimeError("JWT_SECRET must be at least 32 bytes. See backend/.env.example.")
         return secret
-
-    def read_private_key(self) -> bytes:
-        try:
-            return self.private_key_path.read_bytes()
-        except OSError as exc:
-            raise RuntimeError(
-                f"Signing key not readable at {self.private_key_path}. "
-                "Generate it with: uv run python backend/scripts/generate_keys.py"
-            ) from exc
 
 
 @lru_cache

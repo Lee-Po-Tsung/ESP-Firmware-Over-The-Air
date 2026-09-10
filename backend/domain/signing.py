@@ -1,21 +1,35 @@
-"""Signing, hashing and version-compare logic.
+"""Manifest building, signature verification, hashing and version-compare.
 
-Signs the firmware manifest with RSA-PSS so an ESP32 can verify a download
+The firmware manifest is signed with RSA-PSS so an ESP32 can verify a download
 against its embedded public key. The manifest format and PSS parameters must
 stay in step with the on-device verifier in `esp32/main/ota.cpp`; changing
 either means re-flashing every device.
+
+The server verifies and does not sign. `sign_manifest` is still here because
+`scripts/sign_firmware.py` is the other half of the same contract and has to
+build the identical string, but nothing on the request path calls it: the
+private key belongs to whoever built the image, and a server that cannot
+produce a signature is a server whose compromise cannot produce firmware any
+device will accept.
 """
 
 from __future__ import annotations
 
 import base64
+import binascii
 import hashlib
 import re
 from pathlib import Path
 
+from cryptography.exceptions import InvalidSignature, UnsupportedAlgorithm
 from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.primitives.asymmetric import padding
-from cryptography.hazmat.primitives.serialization import load_pem_private_key
+from cryptography.hazmat.primitives.asymmetric import padding, rsa
+from cryptography.hazmat.primitives.serialization import (
+    Encoding,
+    PublicFormat,
+    load_pem_private_key,
+    load_pem_public_key,
+)
 
 
 class InvalidManifestField(ValueError):
@@ -45,6 +59,10 @@ def build_manifest(model: str, version: str, sha256_hex: str) -> str:
 # those and would build a real tuple here while `String::toInt()` on the same
 # UTF-8 bytes returns 0, which is the divergence this check exists to close.
 VERSION_FORMAT = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+$")
+
+# Below this an RSA key is not slow to forge, it is cheap. The device has no
+# opinion, so the floor has to be here.
+MIN_PUBLIC_KEY_BITS = 2048
 
 
 def validate_manifest_fields(model: str, version: str) -> None:
@@ -86,6 +104,72 @@ def sign_manifest(model: str, version: str, sha256_hex: str, private_key_pem: by
         hashes.SHA256(),
     )
     return base64.b64encode(signature).decode("utf-8")
+
+
+class InvalidPublicKey(ValueError):
+    """A stored or submitted public key that cannot be used to verify anything."""
+
+
+class SignatureRejected(Exception):
+    """The signature does not cover this manifest under this account's key."""
+
+
+def verify_manifest(
+    model: str, version: str, sha256_hex: str, signature_b64: str, public_key_pem: str
+) -> None:
+    """Check a signature over `model|version|sha256`. Raises on anything but a match.
+
+    The salt length is `AUTO` rather than `MAX_LENGTH`, which is what the
+    device does: mbedtls recovers the salt length from the encoded message and
+    accepts any conforming signer. Pinning the maximum here would refuse
+    signatures the ESP32 would go on to accept, which puts the two verifiers
+    out of step in the one direction that is confusing rather than safe: the
+    upload is rejected and the image it describes would have flashed fine.
+    """
+    try:
+        public_key = load_pem_public_key(public_key_pem.encode("utf-8"))
+    except (ValueError, TypeError, UnsupportedAlgorithm) as exc:
+        raise InvalidPublicKey(str(exc)) from exc
+    if not isinstance(public_key, rsa.RSAPublicKey):
+        raise InvalidPublicKey("public key must be RSA")
+
+    try:
+        signature = base64.b64decode(signature_b64, validate=True)
+    except (ValueError, binascii.Error) as exc:
+        raise SignatureRejected("signature is not valid base64") from exc
+
+    manifest_bytes = build_manifest(model, version, sha256_hex).encode("utf-8")
+    try:
+        public_key.verify(
+            signature,
+            manifest_bytes,
+            padding.PSS(mgf=padding.MGF1(hashes.SHA256()), salt_length=padding.PSS.AUTO),
+            hashes.SHA256(),
+        )
+    except InvalidSignature as exc:
+        raise SignatureRejected(
+            f"signature does not cover {build_manifest(model, version, sha256_hex)}"
+        ) from exc
+
+
+def load_public_key(public_key_pem: str) -> str:
+    """Return the PEM an account should store, or raise `InvalidPublicKey`.
+
+    Re-serialized rather than stored as typed. A key that round-trips is a key
+    that will load again at upload time, and normalizing the encoding means a
+    stray blank line or CRLF is settled once here rather than on every verify.
+    """
+    try:
+        public_key = load_pem_public_key(public_key_pem.strip().encode("utf-8"))
+    except (ValueError, TypeError, UnsupportedAlgorithm) as exc:
+        raise InvalidPublicKey("not a PEM public key") from exc
+    if not isinstance(public_key, rsa.RSAPublicKey):
+        raise InvalidPublicKey("public key must be RSA")
+    if public_key.key_size < MIN_PUBLIC_KEY_BITS:
+        raise InvalidPublicKey(f"RSA key must be at least {MIN_PUBLIC_KEY_BITS} bits")
+    return public_key.public_bytes(
+        encoding=Encoding.PEM, format=PublicFormat.SubjectPublicKeyInfo
+    ).decode("utf-8")
 
 
 def parse_version(version: str) -> tuple[int, ...]:

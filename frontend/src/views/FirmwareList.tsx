@@ -7,7 +7,7 @@ export default function FirmwareList({ groupedFirmwares, onWithdrawn }: {
   groupedFirmwares: FirmwareGroup[];
   onWithdrawn: (updated: Firmware) => void;
 }) {
-  const { session } = useAuth();
+  const { authFetch } = useAuth();
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const [hasInitialized, setHasInitialized] = useState(false);
   const [confirmingId, setConfirmingId] = useState<number | null>(null);
@@ -19,10 +19,6 @@ export default function FirmwareList({ groupedFirmwares, onWithdrawn }: {
     setExpandedGroups(new Set(groupedFirmwares.map(g => g.model)));
     setHasInitialized(true);
   }
-
-  // Absent rather than disabled: upload and withdraw are both admin-gated, and
-  // an operator has no path to either.
-  const canWithdraw = session?.role === 'admin';
 
   const toggleGroup = (model: string) => {
     const newExpanded = new Set(expandedGroups);
@@ -49,9 +45,8 @@ export default function FirmwareList({ groupedFirmwares, onWithdrawn }: {
     setMessage(null);
 
     try {
-      const res = await fetch(`/backend/api/firmware/${id}/deactivate`, {
+      const res = await authFetch(`/backend/api/firmware/${id}/deactivate`, {
         method: 'POST',
-        headers: session ? { Authorization: `Bearer ${session.token}` } : undefined,
       });
 
       if (res.status === 401) {
@@ -166,7 +161,7 @@ export default function FirmwareList({ groupedFirmwares, onWithdrawn }: {
                                     route only deactivates. */}
                                 {!item.active ? (
                                   <span className="badge badge-warning">已下架</span>
-                                ) : !canWithdraw ? null : isConfirming ? (
+                                ) : isConfirming ? (
                                   <div className="fw-withdraw-confirm">
                                     <p className="fw-withdraw-text font-mono text-xs text-tertiary">
                                       不再將 v{item.version} 提供給 {group.model} 裝置？檔案會保留在伺服器上，
