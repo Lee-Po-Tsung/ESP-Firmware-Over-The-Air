@@ -86,3 +86,31 @@ test('signing out and back in keeps the account it belongs to', async ({ page })
   await expect(page).toHaveURL('/');
   await expect(page.getByText(email)).toBeVisible();
 });
+
+test('three parallel requests past the renew margin spend one refresh handle', async ({ page }) => {
+  // The device page fires three authFetch calls at once. Handles are single
+  // use, so without the single-flight guard in AuthProvider each would spend
+  // one, two would come back 401 and the session would be dropped.
+  await register(page, uniqueEmail());
+
+  await page.evaluate(() => {
+    const stored = sessionStorage.getItem('ota.session');
+    if (!stored) throw new Error('no session to age');
+    const session = JSON.parse(stored);
+    session.expiresAt = Date.now() - 1000;
+    sessionStorage.setItem('ota.session', JSON.stringify(session));
+  });
+
+  let refreshes = 0;
+  page.on('request', request => {
+    if (request.url().includes('/api/auth/refresh')) refreshes += 1;
+  });
+
+  await page.goto('/devices');
+  await expect(page.getByText('還沒有註冊任何裝置')).toBeVisible();
+
+  // Still signed in, and one renewal did it. Three is the failure this exists
+  // to prevent, and it looks identical on screen right up until the logout.
+  await expect(page).toHaveURL('/devices');
+  expect(refreshes).toBe(1);
+});
