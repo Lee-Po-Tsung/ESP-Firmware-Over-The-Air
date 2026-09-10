@@ -66,6 +66,19 @@ class ModelNotFound(Exception):
     """Raised when the requested model has no firmware on record (the API returns HTTP 403)."""
 
 
+class ModelMismatch(Exception):
+    """Raised when a check-in claims a model that is not the one it registered as.
+
+    Carries both so the server log can name them; the route answers a bare 403
+    either way.
+    """
+
+    def __init__(self, registered: str, claimed: str) -> None:
+        super().__init__(f"registered as {registered!r}, claimed {claimed!r}")
+        self.registered = registered
+        self.claimed = claimed
+
+
 class UnknownDevice(Exception):
     """Raised when a check-in cannot be attributed to a registered, enabled device.
 
@@ -121,6 +134,13 @@ class CheckUpdate:
             raise UnknownDevice(req.device_id)
         if not secret_matches(req.device_secret, device.secret_hash):
             raise UnknownDevice(req.device_id)
+        # Before the firmware lookup, not after. Compared afterwards, the
+        # answer would differ for a model this account publishes and one it
+        # does not, and a single teardown would read the account's whole model
+        # catalogue by trying names. Refused here, the response depends only on
+        # what the caller already knows about its own unit.
+        if req.model != device.model:
+            raise ModelMismatch(device.model, req.model)
 
         # Read before the check-in overwrites it. This is the only moment the
         # previous reported version is still available, and the whole event log
@@ -133,7 +153,7 @@ class CheckUpdate:
         self._devices.record_checkin(
             Device(
                 device_id=req.device_id,
-                model=req.model,
+                model=device.model,
                 owner_id=owner_id,
                 current_version=req.version,
                 last_seen=datetime.now(timezone.utc),
@@ -155,7 +175,7 @@ class CheckUpdate:
                 )
             )
 
-        latest = self._repo.get_latest_for_model(req.model, owner_id)
+        latest = self._repo.get_latest_for_model(device.model, owner_id)
         if latest is None:
             raise ModelNotFound(req.model)
 
@@ -174,7 +194,7 @@ class CheckUpdate:
 
         return CheckUpdateResult(
             update_available=True,
-            model=req.model,
+            model=device.model,
             version=latest.version,
             signature=latest.signature,
             # The device follows this verbatim (`ota.cpp:392`), so the id it

@@ -319,3 +319,45 @@ def test_a_check_in_appears_on_its_owner_s_dashboard(world, client):
 
     assert listed[0]["current_version"] == "1.0.0"
     assert client.get("/api/devices", headers=auth(client, "bob@example.com")).json() == []
+
+
+def test_a_teardown_does_not_yield_another_model_s_firmware(world, client):
+    """The model steers the lookup, so it may not come from the request body.
+
+    This is what buying one unit is meant to be worth. A cheap sensor's secret
+    reads that sensor's updates; claiming to be the expensive gateway has to
+    get the caller nothing, or the per-device secret buys nothing over a
+    per-tenant one.
+    """
+    world["firmware"].add(
+        Firmware(
+            owner_id=world["alice"].id,
+            download_id="gateway-link",
+            model="GATEWAY",
+            version="4.0.0",
+            filename="gw.bin",
+            signature="gateway-signature",
+            sha256="c" * 64,
+            size_bytes=4,
+        )
+    )
+    sensor = register(client, "alice@example.com", model="ESP32")
+
+    res = check(client, sensor, model="GATEWAY")
+
+    assert res.status_code == 403, res.text
+    assert "gateway-signature" not in res.text
+
+
+def test_a_check_in_cannot_rewrite_its_own_model(world, client):
+    """The row's model is the owner's statement about the unit, not the unit's.
+
+    Left writable, a teardown relabels the row and the next poll is served the
+    other model's firmware anyway, which is the same hole one check-in later.
+    """
+    unit = register(client, "alice@example.com", model="ESP32")
+
+    check(client, unit, model="GATEWAY")
+
+    stored = world["devices"].get_by_device_id(unit["device_id"])
+    assert stored.model == "ESP32"

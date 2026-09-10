@@ -17,12 +17,14 @@ expects.
 
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timezone
 from urllib.parse import quote
 
 from application.check_update import (
     CheckUpdate,
     CheckUpdateRequest,
+    ModelMismatch,
     ModelNotFound,
     UnknownDevice,
 )
@@ -69,6 +71,8 @@ from api.deps import (
     get_storage,
     get_upload_firmware,
 )
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -157,6 +161,13 @@ def check_update(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Unknown device"
         ) from exc
+    except ModelMismatch as exc:
+        # Same bare 403 as a model with nothing published, so the two are not
+        # distinguishable from outside. The log is where they separate, and it
+        # is the only place an operator can see that a unit was registered
+        # under one model and flashed with another.
+        logger.warning("Check-in from %s: %s", body.device_id, exc)
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN) from exc
     except ModelNotFound as exc:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN) from exc
 
