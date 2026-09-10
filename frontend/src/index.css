@@ -200,10 +200,12 @@ p {
 }
 
 /* 4. Alerts */
+/* Block, not flex. A flex container makes every child a column, and the
+children of an alert are the words of a sentence: a bare text node either side
+of a <code> or a <Link> came out as four narrow columns instead of a
+paragraph. Anything wanting a column layout inside an alert says so itself,
+the way .dev-new-device does. */
 .alert {
-  display: flex;
-  gap: 0.8rem;
-  align-items: flex-start;
   padding: 1rem 1.2rem;
   border-radius: var(--radius-md);
   font-size: 0.85rem;
@@ -212,7 +214,14 @@ p {
 .alert-title {
   font-weight: 600;
   font-size: 0.9rem;
-  margin-bottom: 0.2rem;
+  margin-right: 0.5rem;
+}
+/* Nothing resets anchors globally, so a link left to the browser comes out
+blue on an alert that is orange or green. Inheriting keeps it inside whichever
+alert it landed in and leaves the underline to say it is a link. */
+.alert a {
+  color: inherit;
+  text-decoration: underline;
 }
 .alert-error {
   background-color: var(--bg-error);
