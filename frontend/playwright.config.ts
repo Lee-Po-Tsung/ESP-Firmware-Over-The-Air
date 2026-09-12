@@ -35,9 +35,20 @@ export default defineConfig({
     {
       // dev, not preview. `server.proxy` is dev-only configuration, so
       // /backend/* would 404 against a preview server.
-      command: `npm run dev -- --mode e2e --port ${FRONTEND_PORT} --strictPort`,
+      //
+      // The host is pinned for the same reason backend.sh pins uvicorn's.
+      // Vite binds one address, not both families, and its default `localhost`
+      // is whatever the resolver puts first: 127.0.0.1 on a developer machine
+      // with an IPv4-only hosts file, ::1 on a runner whose hosts file carries
+      // both. Bound to ::1 it never answers the 127.0.0.1 below, and the only
+      // symptom is this timeout.
+      command: `npm run dev -- --mode e2e --host 127.0.0.1 --port ${FRONTEND_PORT} --strictPort`,
       url: `http://127.0.0.1:${FRONTEND_PORT}`,
       reuseExistingServer: false,
+      // Piped for the same reason as the backend above: without it a server
+      // that fails to start reports a bare timeout naming neither of them.
+      stdout: 'pipe',
+      stderr: 'pipe',
       timeout: 120_000,
     },
   ],
