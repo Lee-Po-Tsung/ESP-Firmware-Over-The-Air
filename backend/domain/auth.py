@@ -1,89 +1,48 @@
-"""Password hashing and access-token logic for dashboard accounts.
+"""The rules an account's credentials must satisfy.
 
-Passwords are bcrypt-hashed; access tokens are stateless JWTs carrying the
-account id and role. The signing secret and lifetime are passed in from config
-so this module stays free of environment lookups and easy to test.
+Hashing and access-token minting used to live here and now belong to
+fastapi-users: pwdlib picks the algorithm, `JWTStrategy` signs the token. What
+is left is the part no library can decide for this project, kept in the domain
+so both doors onto account creation reach the same answer.
+
+Both doors matter. `scripts/create_user.py` is what seeds the first admin and
+`POST /api/auth/register` is what a new tenant uses, and the script once
+skipped the check the route enforced, which is how `--username ""` seeded a
+usable admin. Both now go through `UserManager`, which calls these.
 """
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
-
-import bcrypt
-import jwt
-
-from domain.models import Role
-
-JWT_ALGORITHM = "HS256"
-
-# bcrypt refuses passwords over 72 bytes (raises since bcrypt 5.x). Input
-# boundaries validate against this instead of surfacing a 500.
-MAX_PASSWORD_BYTES = 72
 MIN_PASSWORD_LENGTH = 8
+
+# Argon2 is memory-hard by design, so its cost scales with what it is handed.
+# Unbounded input on an unauthenticated route is therefore a way to spend the
+# server's RAM, not just its CPU. The ceiling is far above any real password.
+MAX_PASSWORD_BYTES = 1024
 
 
 class InvalidCredentialFormat(ValueError):
-    """A username or password that must not be turned into an account."""
+    """A credential no account may be created from."""
 
 
-def validate_credentials(username: str, password: str) -> None:
-    """Reject credentials no account may be created from.
+def normalize_email(email: str) -> str:
+    """Return the form an address is both stored and looked up under.
 
-    `scripts/create_user.py` is the only door: there is no HTTP route that
-    creates an account, so nothing reachable over the network can seed one.
-    The rules live here rather than in the script so a second door, whenever
-    one arrives, cannot be the more permissive of the two.
+    Lowercased, because the two halves of an address do not agree on case:
+    domains are case-insensitive and the local part is technically not, but no
+    mail provider in practice delivers `Foo@x.com` and `foo@x.com` to different
+    people. Storing both as separate accounts is a support ticket, so the
+    server picks one reading and applies it on write and on read alike.
+
+    Whether the address is well-formed at all is Pydantic's `EmailStr`, on the
+    schema. This only settles the form.
     """
-    if not username:
-        raise InvalidCredentialFormat("username must not be empty")
+    return email.strip().lower()
+
+
+def validate_password(password: str) -> None:
+    """Reject a password no account may be created from."""
     if len(password) < MIN_PASSWORD_LENGTH:
         raise InvalidCredentialFormat(f"password must be at least {MIN_PASSWORD_LENGTH} characters")
     if len(password.encode("utf-8")) > MAX_PASSWORD_BYTES:
         raise InvalidCredentialFormat(f"password must be at most {MAX_PASSWORD_BYTES} bytes")
-
-
-def hash_password(plaintext: str) -> str:
-    """Return a bcrypt hash of the password, safe to store.
-
-    Callers must reject passwords over MAX_PASSWORD_BYTES first; bcrypt
-    raises ValueError past that.
-    """
-    return bcrypt.hashpw(plaintext.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
-
-
-def verify_password(plaintext: str, password_hash: str) -> bool:
-    """Check a plaintext password against a stored bcrypt hash.
-
-    Over-long input can never match a stored hash (hash_password refuses it),
-    so report a mismatch instead of letting bcrypt raise on a login attempt.
-    """
-    if len(plaintext.encode("utf-8")) > MAX_PASSWORD_BYTES:
-        return False
-    return bcrypt.checkpw(plaintext.encode("utf-8"), password_hash.encode("utf-8"))
-
-
-class InvalidToken(Exception):
-    """Raised when an access token is missing, malformed, or expired."""
-
-
-def create_access_token(
-    user_id: int, role: Role, secret: str, expires_minutes: int, now: datetime | None = None
-) -> str:
-    """Mint a signed JWT with the account id as subject and role as a claim."""
-    issued_at = now or datetime.now(timezone.utc)
-    payload = {
-        "sub": str(user_id),
-        "role": role.value,
-        "iat": issued_at,
-        "exp": issued_at + timedelta(minutes=expires_minutes),
-    }
-    return jwt.encode(payload, secret, algorithm=JWT_ALGORITHM)
-
-
-def decode_access_token(token: str, secret: str) -> tuple[int, Role]:
-    """Verify a token and return its (user_id, role). Raises InvalidToken on failure."""
-    try:
-        payload = jwt.decode(token, secret, algorithms=[JWT_ALGORITHM])
-        return int(payload["sub"]), Role(payload["role"])
-    except (jwt.InvalidTokenError, KeyError, ValueError) as exc:
-        raise InvalidToken(str(exc)) from exc

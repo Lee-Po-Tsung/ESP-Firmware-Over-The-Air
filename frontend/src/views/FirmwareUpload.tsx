@@ -1,5 +1,6 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../auth/context';
+import { importPrivateKey, sha256Hex, signManifest, type SigningKey } from '../crypto/signing';
 import './FirmwareUpload.css';
 
 // Outcome rides alongside the text instead of being sniffed back out of it.
@@ -20,7 +21,7 @@ type Inspection =
   | { state: 'absent'; reason: string };
 
 export default function FirmwareUpload({ onPublished }: { onPublished: () => void }) {
-  const { session } = useAuth();
+  const { session, authFetch } = useAuth();
   const formRef = useRef<HTMLFormElement>(null);
   const [submitting, setSubmitting] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
@@ -28,8 +29,14 @@ export default function FirmwareUpload({ onPublished }: { onPublished: () => voi
   const [inspection, setInspection] = useState<Inspection>({ state: 'idle' });
   const [model, setModel] = useState('');
   const [version, setVersion] = useState('');
+  const [signature, setSignature] = useState('');
+  const [fileBytes, setFileBytes] = useState<ArrayBuffer | null>(null);
+  const [signingKey, setSigningKey] = useState<SigningKey | null>(null);
+  const [keyName, setKeyName] = useState('');
+  const [keyError, setKeyError] = useState<string | null>(null);
 
   const identified = inspection.state === 'found';
+  const canPublish = session?.account.hasPublicKey ?? false;
 
   // Read the image as soon as it is picked, before anything else is filled in.
   // Both fields are cleared first: an image that names itself overwrites them,
@@ -41,8 +48,14 @@ export default function FirmwareUpload({ onPublished }: { onPublished: () => voi
     setNotice(null);
     setModel('');
     setVersion('');
+    // The signature covers a hash of one exact file. Keeping the old one here
+    // would let a signature for the previous pick ride along with this one,
+    // and the only thing that would catch it is the server rejecting an upload
+    // whose message is about the signature rather than about the swap.
+    setSignature('');
 
     if (!file) {
+      setFileBytes(null);
       setInspection({ state: 'idle' });
       return;
     }
@@ -51,7 +64,9 @@ export default function FirmwareUpload({ onPublished }: { onPublished: () => voi
     try {
       // latin1 maps every byte to one code unit, so byte offsets survive and
       // no sequence is dropped as invalid the way utf-8 decoding would.
-      const text = new TextDecoder('latin1').decode(await file.arrayBuffer());
+      const bytes = await file.arrayBuffer();
+      setFileBytes(bytes);
+      const text = new TextDecoder('latin1').decode(bytes);
       const found = [...text.matchAll(BUILD_TAG)];
 
       if (found.length === 1) {
@@ -65,9 +80,49 @@ export default function FirmwareUpload({ onPublished }: { onPublished: () => voi
         setInspection({ state: 'absent', reason: '這個檔案沒有版本標記。' });
       }
     } catch {
+      setFileBytes(null);
       setInspection({ state: 'absent', reason: '讀不到這個檔案的內容。' });
     }
   }
+
+  async function handleKeyChange(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0] ?? null;
+    setKeyError(null);
+    setSignature('');
+    if (!file) {
+      setSigningKey(null);
+      setKeyName('');
+      return;
+    }
+    try {
+      setSigningKey(await importPrivateKey(await file.text()));
+      setKeyName(file.name);
+    } catch (e) {
+      setSigningKey(null);
+      setKeyName('');
+      setKeyError(e instanceof Error ? e.message : '讀不到這個私鑰。');
+    }
+  }
+
+  // Signing is driven by what the signature covers rather than by the moment a
+  // file is picked. Model and version are part of the manifest and are still
+  // editable for an image that does not name itself, so a signature produced
+  // when the file arrived would be stale by the time it is sent.
+  useEffect(() => {
+    if (!signingKey || !fileBytes || !model || !version) return;
+    let current = true;
+    (async () => {
+      try {
+        const sig = await signManifest(signingKey, model, version, await sha256Hex(fileBytes));
+        if (current) setSignature(sig);
+      } catch (e) {
+        if (current) setKeyError(e instanceof Error ? e.message : '簽章失敗。');
+      }
+    })();
+    return () => {
+      current = false;
+    };
+  }, [signingKey, fileBytes, model, version]);
 
   async function handleSubmit(event: React.SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -81,18 +136,13 @@ export default function FirmwareUpload({ onPublished }: { onPublished: () => voi
     setNotice(null);
 
     try {
-      const res = await fetch('/backend/firmware/upload', {
+      const res = await authFetch('/backend/firmware/upload', {
         method: 'POST',
-        headers: session ? { Authorization: `Bearer ${session.token}` } : undefined,
         body: new FormData(form),
       });
 
       if (res.status === 401) {
         setNotice({ text: '登入階段已過期，請重新登入。', ok: false });
-        return;
-      }
-      if (res.status === 403) {
-        setNotice({ text: '只有管理員帳號可以發布韌體。', ok: false });
         return;
       }
       // Several distinct causes share these codes, and the backend already
@@ -115,8 +165,10 @@ export default function FirmwareUpload({ onPublished }: { onPublished: () => voi
       setNotice({ text: published ? `韌體已發布：${published}。` : '韌體已發布。', ok: true });
       form.reset();
       setSelectedFileName('');
+      setFileBytes(null);
       setModel('');
       setVersion('');
+      setSignature('');
       setInspection({ state: 'idle' });
       // The list is fetched once when the session appears, so without this the
       // version just published is missing from it until the page is reloaded.
@@ -133,9 +185,71 @@ export default function FirmwareUpload({ onPublished }: { onPublished: () => voi
       <div className="card upload-card">
         <div className="upload-header">
           <h1 className="text-xl font-bold text-primary">發布韌體</h1>
-          <p className="text-xs text-secondary">上傳後由伺服器簽署。同型號的裝置會在下一次回報時取得這個版本。</p>
+          <p className="text-xs text-secondary">
+            上傳前先在自己的機器上簽名，伺服器只驗章不簽章。驗過之後，你自己的同型號裝置會在下一次回報時取得這個版本。
+          </p>
         </div>
+        {/* Outside the form, and that is the point. Inside it, the private
+            key would stay out of the upload only because the input carries no
+            `name`, which is one attribute between a signing key and the wire.
+            Here there is no arrangement of attributes that could send it. */}
+        <div className="form-group">
+          <label className="form-label" htmlFor="signing-key">簽章私鑰（.pem）</label>
+          <div className="dropzone">
+            <input
+              id="signing-key"
+              type="file"
+              className="dropzone-input"
+              accept=".pem,.key"
+              onChange={handleKeyChange}
+            />
+            <div className="dropzone-content">
+              <span className="btn btn-secondary">
+                + 選擇 .pem 檔
+              </span>
+              {keyName && !keyError
+                ? <span className="form-help font-mono">{keyName}</span>
+                : <span className="form-help">或拖曳檔案到這裡</span>}
+            </div>
+          </div>
+          <span className="form-help">
+            選了之後，下面的簽章會在這個瀏覽器分頁裡算好。私鑰不會上傳，也不會離開這台機器。
+            習慣用終端機的話可以不選，自己跑{' '}
+            <code className="font-mono">sign_firmware.py</code> 再把結果貼到簽章欄。
+          </span>
+          {keyError && (
+            <div className="alert alert-error">
+              <span className="alert-title">私鑰讀取失敗：</span>
+              {keyError}
+            </div>
+          )}
+        </div>
+
         <form ref={formRef} onSubmit={handleSubmit}>
+          {/* Next to the key that produces it, rather than after the fields
+              it covers. Filled in by the effect above whenever a key is
+              loaded, and typed into only by someone who signed elsewhere.
+              Inside the form because it is sent; the key above is not. */}
+          <div className="form-group">
+            <label className="form-label" htmlFor="firmware-signature">簽章</label>
+            <textarea
+              id="firmware-signature"
+              name="signature"
+              className="form-input font-mono"
+              rows={3}
+              placeholder={signingKey ? '選好下面的映像檔就會自動填' : '貼上 sign_firmware.py 印出來的那一段'}
+              value={signature}
+              onChange={event => setSignature(event.target.value)}
+              style={{ resize: 'vertical' }}
+              required
+            />
+            <span className="form-help">
+              {signingKey
+                ? '用上面那把私鑰在這個分頁裡簽的。換檔案或改版號都會重簽：簽章綁的是這三樣東西。'
+                : '沒有選私鑰的話，自己跑 sign_firmware.py 產生。換檔案的話要重簽：簽章綁的是這個檔案的雜湊。'}
+            </span>
+          </div>
+
           <div className="form-group">
             <label className="form-label" htmlFor="firmware-file">韌體映像檔（.bin）</label>
             <div className="dropzone">
@@ -241,8 +355,8 @@ export default function FirmwareUpload({ onPublished }: { onPublished: () => voi
             </div>
           )}
 
-          <button type="submit" className="btn btn-primary" style={{ width: '100%', marginTop: '0.9rem', padding: '0.82rem' }} disabled={submitting || inspection.state === 'checking'}>
-            {inspection.state === 'checking' ? '讀取映像檔中...' : submitting ? '上傳中...' : '上傳並發布'}
+          <button type="submit" className="btn btn-primary" style={{ width: '100%', marginTop: '0.9rem', padding: '0.82rem' }} disabled={submitting || inspection.state === 'checking' || !canPublish}>
+            {inspection.state === 'checking' ? '讀取映像檔中...' : submitting ? '上傳中...' : !canPublish ? '要先設定簽章公鑰' : '上傳並發布'}
           </button>
         </form>
       </div>

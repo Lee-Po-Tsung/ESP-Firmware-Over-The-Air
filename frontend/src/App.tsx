@@ -3,16 +3,14 @@ import { Routes, Route, Link, Navigate, useLocation } from 'react-router'
 import type { ReactNode } from 'react';
 import DeviceList from './pages/DeviceList';
 import Firmware from './pages/Firmware';
+import ForgotPassword from './pages/ForgotPassword';
+import Register from './pages/Register';
 import Login from './pages/Login';
-import { useAuth, type Role } from './auth/context';
+import ResetPassword from './pages/ResetPassword';
+import { useAuth } from './auth/context';
 import { useState, useEffect } from 'react';
 
-// Accounts are keyed by username. The backend holds no display name and no
-// email, so the role is the only other thing there is to show here.
-const ROLE_LABELS: Record<Role, string> = {
-  admin: '管理員',
-  operator: '操作員',
-};
+const SIGNED_OUT_PATHS = new Set(['/login', '/register', '/forgot-password', '/reset-password']);
 
 function SiderBar() {
   const { pathname } = useLocation();
@@ -40,7 +38,10 @@ function SiderBar() {
     };
   }, []);
 
-  if (pathname === '/login') return null;
+  // Every screen that is reachable without a session, not just the login
+  // form. A sidebar offering the fleet to someone who cannot load it is worse
+  // than no sidebar.
+  if (SIGNED_OUT_PATHS.has(pathname)) return null;
 
   const navItems = [
     { to: '/', index: '01', label: '韌體管理', hint: 'Firmware overview' },
@@ -85,8 +86,7 @@ function SiderBar() {
             <div className="sidebar-account">
               {session ? (
                 <>
-                  <strong className="sidebar-account-name text-sm font-medium text-primary font-mono">{session.username}</strong>
-                  <span className="sidebar-account-role text-xs text-tertiary font-mono">{ROLE_LABELS[session.role]}</span>
+                  <strong className="sidebar-account-name text-sm font-medium text-primary font-mono">{session.account.email}</strong>
                 </>
               ) : (
                 <span className="sidebar-account-name text-sm font-medium text-primary font-mono">Guest</span>
@@ -155,6 +155,9 @@ function App() {
             }
           />
           <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
         </Routes>
       </main>
     </>

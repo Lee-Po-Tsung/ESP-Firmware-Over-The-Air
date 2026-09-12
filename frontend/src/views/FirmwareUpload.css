@@ -1,28 +1,13 @@
+/* Width, scrolling and the entrance animation belong to
+  `.firmware-publish-column` in Firmware.css, which is what holds this card and
+  the signing key card together as one column. */
 .upload-container {
   width: 100%;
   box-sizing: border-box;
   margin: 0;
-  flex: 0 0 48%;
-  max-width: 48%;
-  min-width: 450px;
-  height: 100%;
-  padding: 1.4rem 0.85rem 1.25rem 1.25rem;
   color: var(--text-primary);
   text-align: left;
-  animation: fadeIn 0.35s ease-out;
   font-family: var(--font-sans);
-  overflow-y: auto;
-}
-
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
 }
 
 .upload-header {
@@ -39,11 +24,3 @@
   margin: 0;
 }
 
-@media (max-width: 1200px) {
-  .upload-container {
-    flex: 1 1 100%;
-    max-width: 100%;
-    min-width: 0;
-    padding: 1rem 1rem 0.75rem;
-  }
-}

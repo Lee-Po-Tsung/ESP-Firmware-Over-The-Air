@@ -7,6 +7,9 @@ last reported. Plain dataclasses, passed around by the rest of the backend.
 
 from __future__ import annotations
 
+import hashlib
+import hmac
+import secrets
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
@@ -26,26 +29,100 @@ class EventType(str, Enum):
     ROLLBACK = "rollback"
 
 
-class Role(str, Enum):
-    """Who is allowed to do what.
+@dataclass
+class User:
+    """A dashboard account, shaped to fastapi-users' `UserProtocol`.
 
-    `admin` publishes firmware and manages users; `operator` is a read-mostly
-    account for the dashboard. Stored as its string value in the database.
+    The field names are the library's, not ours: `email`, `hashed_password`,
+    `is_active`, `is_superuser` and `is_verified` are read by name off whatever
+    object the database adapter returns, so a dataclass that renames any of
+    them stops being a user as far as the routers are concerned.
+
+    `hashed_password` is whatever pwdlib produced, which is argon2 for anything
+    hashed here and bcrypt for rows predating the migration. The hash names its
+    own algorithm, so nothing needs to record which.
+
+    `is_verified` and `is_superuser` are stored and never checked. The protocol
+    requires both. Verification needs a mail transport this server does not
+    have, and there is no privileged account any more: an account reaches what
+    it owns, which is the whole of the authorization model.
+
+    `public_key` is the key this account's uploads are verified against. The
+    matching private key never reaches the server, which is the point: a
+    compromised server cannot produce firmware any device will accept. An
+    account that has not set one cannot publish.
     """
 
-    ADMIN = "admin"
-    OPERATOR = "operator"
+    email: str
+    hashed_password: str
+    is_active: bool = True
+    is_superuser: bool = False
+    is_verified: bool = False
+    public_key: str | None = None
+    id: int | None = None
+    created_at: datetime | None = None
 
 
 @dataclass
-class User:
-    """A dashboard account. `password_hash` is a bcrypt hash, never the plaintext."""
+class RefreshToken:
+    """One long-lived, opaque handle that mints fresh access tokens.
 
-    username: str
-    password_hash: str
-    role: Role = Role.OPERATOR
-    id: int | None = None
+    Opaque and stored rather than a second JWT, because the point of it is to
+    be revocable: a stateless refresh token cannot be withdrawn before it
+    expires, which is the only thing it would buy over a longer access token.
+    Rotated on every use, so a stolen handle is usable at most once before the
+    real client's next refresh invalidates it.
+    """
+
+    token: str
+    user_id: int
     created_at: datetime | None = None
+
+
+# 24 bytes of urandom, base64url encoded to 32 characters. The download route
+# cannot authenticate, so this is the whole credential; sized so that guessing
+# one is not a thing anyone attempts.
+DOWNLOAD_ID_BYTES = 24
+
+
+def new_download_id() -> str:
+    return secrets.token_urlsafe(DOWNLOAD_ID_BYTES)
+
+
+# The identifier a registered unit reports, minted here rather than taken from
+# the MAC address it used to be. A MAC is not secret, and within one vendor
+# prefix it is enumerable, so it named devices that had not registered as
+# easily as ones that had.
+DEVICE_ID_BYTES = 12
+
+# The secret that proves a check-in came from that unit. Long enough that
+# guessing is not a strategy, which is what lets the server store a plain
+# SHA-256 of it rather than a deliberately slow password hash.
+DEVICE_SECRET_BYTES = 32
+
+
+def new_device_id() -> str:
+    return secrets.token_urlsafe(DEVICE_ID_BYTES)
+
+
+def new_device_secret() -> str:
+    return secrets.token_urlsafe(DEVICE_SECRET_BYTES)
+
+
+def hash_device_secret(secret: str) -> str:
+    return hashlib.sha256(secret.encode("utf-8")).hexdigest()
+
+
+def secret_matches(secret: str, secret_hash: str | None) -> bool:
+    """Whether a presented secret is the one this device registered with.
+
+    Compared in constant time. The digests are public-length and the comparison
+    is not the weak point here, but a byte-at-a-time `==` on a value an
+    attacker supplies is the kind of thing that is only ever noticed later.
+    """
+    if not secret_hash:
+        return False
+    return hmac.compare_digest(hash_device_secret(secret), secret_hash)
 
 
 @dataclass
@@ -67,6 +144,17 @@ class Firmware:
 
     `active` is the publish state. A withdrawn version keeps its row so the
     dashboard can show history, but `get_latest_for_model` never offers it.
+
+    `owner_id` is the account that uploaded it, and the axis every other
+    account's reads are filtered against. It also widens both uniqueness rules:
+    two tenants may each publish their own `ESP32 1.0.0`.
+
+    `download_id` is what `/api/download/{...}` is addressed by, and it is a
+    capability rather than a name. The route cannot authenticate, since the
+    device has no credential to send, so possession of this string is the only
+    thing standing between a caller and the bytes. It is random for that reason:
+    a serial number would let anyone holding one of their own links derive
+    everyone else's.
     """
 
     model: str
@@ -75,6 +163,8 @@ class Firmware:
     signature: str
     sha256: str
     size_bytes: int
+    owner_id: int | None = None
+    download_id: str | None = None
     notes: str | None = None
     active: bool = True
     original_filename: str | None = None
@@ -99,10 +189,26 @@ class Device:
     Everything past `model` is nullable. Rows written before a field existed
     are never backfilled, since the device overwrites its own row on the next
     check-in anyway.
+
+    `owner_id` is the account the unit belongs to, and what decides whose
+    dashboard it appears on. A row only exists because someone registered it,
+    so it is always set on anything written since registration landed.
+
+    `secret_hash` is SHA-256 of the value in that unit's `config.json`, and it
+    is what a check-in is identified by. It never leaves the server: the
+    plaintext is shown once, at registration, and is not recoverable after.
+
+    `enabled` is read on every check-in rather than baked into a token, so
+    switching it off stops the next poll rather than waiting for anything to
+    expire.
     """
 
     device_id: str
     model: str
+    owner_id: int | None = None
+    secret_hash: str | None = None
+    enabled: bool = True
+    registered_at: datetime | None = None
     current_version: str | None = None
     last_seen: datetime | None = None
     poll_interval_seconds: int | None = None

@@ -1,8 +1,8 @@
 """Tests for the secrets Settings reads lazily.
 
 Key generation, TLS certs and alembic all import config before `.env` exists,
-so constructing Settings must not require JWT_SECRET or a signing key; only
-reading them (as the server does at boot) may fail.
+so constructing Settings must not require JWT_SECRET; only reading it, as the
+server does at boot, may fail.
 """
 
 from __future__ import annotations
@@ -57,10 +57,15 @@ def test_engine_creates_the_directory_of_the_database_it_opens(monkeypatch, tmp_
     get_settings.cache_clear()
 
 
-def test_missing_signing_key_names_the_step_that_was_skipped(monkeypatch, tmp_path):
-    # Read during dependency resolution, where a bare FileNotFoundError becomes
-    # a 500 that names deps.py instead of the setup command.
-    monkeypatch.setenv("KEYS_DIR", str(tmp_path))
+def test_the_server_reads_no_signing_key(monkeypatch, tmp_path):
+    """There is nothing under KEYS_DIR the server needs to boot.
 
-    with pytest.raises(RuntimeError, match="generate_keys.py"):
-        Settings().read_private_key()
+    Firmware is verified against the public key on the uploading account, so a
+    checkout that never ran `generate_keys.py` serves fine. Only somebody about
+    to publish needs a key pair, and it is theirs, not the server's.
+    """
+    monkeypatch.setenv("KEYS_DIR", str(tmp_path))
+    get_settings.cache_clear()
+
+    assert not hasattr(Settings(), "read_private_key")
+    get_settings.cache_clear()

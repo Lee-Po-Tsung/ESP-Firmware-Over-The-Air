@@ -15,6 +15,7 @@ dependencies = [
     "pyjwt>=2.13.0",
     "bcrypt>=5.0.0",
     "python-dotenv>=1.2.2",
+    "fastapi-users[sqlalchemy]>=15.0.5",
 ]
 
 [dependency-groups]
@@ -26,11 +27,16 @@ dev = [
     "pytest>=8.0.0",
     "httpx>=0.28.1",
     "editorconfig-checker>=3.6.1",
+    "pytest-asyncio>=1.4.0",
 ]
 
 [tool.pytest.ini_options]
 pythonpath = ["backend"]
 testpaths = ["backend/tests"]
+# The database adapter fastapi-users reads through is async because the library
+# awaits it, so the tests for it are too. Auto mode rather than a marker on
+# each: nothing in this suite uses a different async framework.
+asyncio_mode = "auto"
 
 [tool.black]
 line-length = 100

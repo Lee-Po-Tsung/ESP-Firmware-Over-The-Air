@@ -1,8 +1,14 @@
-"""Handle an admin uploading a new firmware build.
+"""Handle an account uploading a new firmware build.
 
-Settles what the upload publishes as, computes its SHA-256, signs the
-`model|version|sha256` manifest with the private key, stores the bytes under a
-name derived from that hash, and saves a firmware record pointing at them.
+Settles what the upload publishes as, computes its SHA-256, checks the
+signature the uploader supplied against that account's public key, stores the
+bytes under a name derived from the hash, and saves a firmware record pointing
+at them.
+
+Verify, not sign. The server holds no private key at all, so what it stores is
+a signature produced by whoever built the image. That is the difference between
+attesting who uploaded a file and attesting who built it, and it is what stops
+a compromised server from producing firmware any device would accept.
 
 The model and version are read out of the image itself wherever it carries a
 build marker, so the label a build is stored under cannot drift from the one it
@@ -15,7 +21,7 @@ from dataclasses import dataclass
 
 from domain import signing
 from domain.firmware_image import read_build_tag, validate_image
-from domain.models import Firmware
+from domain.models import Firmware, new_download_id
 from ports.repository import FirmwareBinaryAlreadyExists, FirmwareRepository
 from ports.storage import StorageBackend
 
@@ -24,6 +30,13 @@ from ports.storage import StorageBackend
 class UploadFirmwareRequest:
     original_filename: str
     data: bytes
+    # Who is publishing. Everything stored is scoped to it, including both
+    # uniqueness rules, so two accounts can each hold their own `ESP32 1.0.0`.
+    owner_id: int
+    # Base64 RSA-PSS over `model|version|sha256`, produced off-server by
+    # `scripts/sign_firmware.py`, and the PEM it is checked against.
+    signature: str
+    owner_public_key: str | None
     # Both optional: an image that carries a build marker names itself, and
     # these are only read for one that does not.
     model: str | None = None
@@ -35,16 +48,14 @@ class InvalidUploadIdentity(Exception):
     """The model and version to publish an upload under could not be settled."""
 
 
+class NoPublicKey(Exception):
+    """The account has not set the key its uploads would be verified against."""
+
+
 class UploadFirmware:
-    def __init__(
-        self,
-        repository: FirmwareRepository,
-        storage: StorageBackend,
-        private_key_pem: bytes,
-    ) -> None:
+    def __init__(self, repository: FirmwareRepository, storage: StorageBackend) -> None:
         self._repo = repository
         self._storage = storage
-        self._private_key_pem = private_key_pem
 
     def _identify(self, req: UploadFirmwareRequest) -> tuple[str, str]:
         """What to publish these bytes as.
@@ -86,7 +97,7 @@ class UploadFirmware:
         signing.validate_manifest_fields(model, version)
 
         sha256_hex = signing.calculate_sha256_bytes(req.data)
-        duplicate = self._repo.get_by_sha256(model, sha256_hex)
+        duplicate = self._repo.get_by_sha256(model, sha256_hex, req.owner_id)
         if duplicate is not None:
             # A device reports the FIRMWARE_VERSION compiled into its image, so
             # the same bytes under two versions leaves it re-reporting the old
@@ -95,11 +106,20 @@ class UploadFirmware:
             # A fast path, not the guarantee. This reads before it writes, so
             # two concurrent uploads both pass it; `repo.add` raises the same
             # error off the unique index for the pair that gets through. Kept
-            # because it answers before signing and storing a blob.
+            # because it answers before verifying and storing a blob.
             raise FirmwareBinaryAlreadyExists(model, duplicate.version)
 
-        # Sign before storing: a signing failure then leaves nothing on disk.
-        signature = signing.sign_manifest(model, version, sha256_hex, self._private_key_pem)
+        # Verified before storing, so a signature that does not check out
+        # leaves nothing on disk. The manifest is rebuilt here out of what the
+        # image and the hash say rather than out of anything the form sent: a
+        # signature is only worth checking against the values it is about to be
+        # stored under.
+        if not req.owner_public_key:
+            raise NoPublicKey(
+                "This account has no public key, so an upload cannot be verified. "
+                "Set one before publishing."
+            )
+        signing.verify_manifest(model, version, sha256_hex, req.signature, req.owner_public_key)
 
         # Named after its contents, so a collision implies identical bytes and
         # the overwrite in `put` is harmless by construction.
@@ -113,11 +133,17 @@ class UploadFirmware:
         # mid-download.
         return self._repo.add(
             Firmware(
+                owner_id=req.owner_id,
+                # Minted here rather than by the database, because it is a
+                # credential and not a key: it has to be random, and a column
+                # default that produced one value per statement would hand two
+                # rows inserted together the same link.
+                download_id=new_download_id(),
                 model=model,
                 version=version,
                 filename=filename,
                 original_filename=req.original_filename,
-                signature=signature,
+                signature=req.signature,
                 sha256=sha256_hex,
                 size_bytes=len(req.data),
                 # Absent and blank collapse to null, so the dashboard has one

@@ -16,8 +16,12 @@ class DeactivateFirmware:
     def __init__(self, repository: FirmwareRepository) -> None:
         self._repo = repository
 
-    def execute(self, firmware_id: int) -> Firmware:
-        firmware = self._repo.deactivate(firmware_id)
+    def execute(self, firmware_id: int, owner_id: int) -> Firmware:
+        # A row belonging to another account is not found, the same answer an
+        # id that never existed gets. Distinguishing them would tell a caller
+        # which ids are real, which is the one thing an id-guessing attempt
+        # needs and cannot otherwise get.
+        firmware = self._repo.deactivate(firmware_id, owner_id)
         if firmware is None:
             raise FirmwareNotFound(firmware_id)
         return firmware

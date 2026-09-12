@@ -12,6 +12,9 @@ interface ApiDevice {
   ip: string | null;
   last_error: string | null;
   failed_attempts: number | null;
+  // Read on every check-in, so switching this off stops the next poll rather
+  // than waiting for anything to expire.
+  enabled: boolean;
   // `null` is unknown, not offline: the server answers this from the poll
   // interval the device itself reports, and a device that has never checked in
   // has not told it one. No threshold belongs on this side.
@@ -72,14 +75,40 @@ function timeAgo(iso: string | null): string {
 }
 
 
+// What registration hands back. The secret exists here and nowhere else: the
+// server keeps only a SHA-256 of it, so there is no route that can show it
+// again and no way to recover it but registering the unit afresh.
+interface NewDevice {
+  device_id: string;
+  device_secret: string;
+  model: string;
+}
+
+function configSnippet(unit: NewDevice): string {
+  return [
+    '{',
+    `  "device_id": "${unit.device_id}",`,
+    `  "device_secret": "${unit.device_secret}"`,
+    '}',
+  ].join('\n');
+}
+
 export default function DeviceList() {
-  const { session } = useAuth();
+  const { session, authFetch } = useAuth();
+  const [registering, setRegistering] = useState(false);
+  const [newModel, setNewModel] = useState('');
+  const [newDevice, setNewDevice] = useState<NewDevice | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [busyDeviceId, setBusyDeviceId] = useState<string | null>(null);
   const [apiDevices, setApiDevices] = useState<ApiDevice[]>([]);
   const [firmwares, setFirmwares] = useState<Firmware[]>([]);
   const [stats, setStats] = useState<FleetStats | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  // Bumped by an action so the list refetches without waiting out the 15s
+  // poll, which is long enough to read as the button having done nothing.
+  const [refreshKey, setRefreshKey] = useState(0);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedModel, setSelectedModel] = useState('全部型號');
@@ -89,15 +118,15 @@ export default function DeviceList() {
     if (!session) return;
     const fetchData = () => {
       Promise.all([
-        fetch('/backend/api/devices', { headers: { Authorization: `Bearer ${session.token}` } }).then(r => {
+        authFetch('/backend/api/devices').then(r => {
           if (!r.ok) throw new Error('Failed to fetch devices');
           return r.json();
         }),
-        fetch('/backend/api/firmware/list', { headers: { Authorization: `Bearer ${session.token}` } }).then(r => {
+        authFetch('/backend/api/firmware/list').then(r => {
           if (!r.ok) throw new Error('Failed to fetch firmwares');
           return r.json();
         }),
-        fetch('/backend/api/devices/stats', { headers: { Authorization: `Bearer ${session.token}` } }).then(r => {
+        authFetch('/backend/api/devices/stats').then(r => {
           if (!r.ok) throw new Error('Failed to fetch device stats');
           return r.json();
         })
@@ -115,7 +144,7 @@ export default function DeviceList() {
     fetchData();
     const interval = setInterval(fetchData, 15000);
     return () => clearInterval(interval);
-  }, [session]);
+  }, [session, authFetch, refreshKey]);
 
   // What the server would answer this model's devices, not what was uploaded
   // last. Withdrawn rows are excluded and versions compare as tuples, so a
@@ -147,6 +176,7 @@ export default function DeviceList() {
       model: d.model,
       ip: d.ip,
       current_version: d.current_version,
+      enabled: d.enabled,
       is_latest,
       last_seen: timeAgo(d.last_seen),
       last_error: d.last_error,
@@ -182,6 +212,44 @@ export default function DeviceList() {
     return matchesSearch && matchesModel && matchesStatus;
   });
 
+  async function registerDevice(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setRegistering(true);
+    setActionError(null);
+
+    try {
+      const res = await authFetch('/backend/api/devices', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: newModel }),
+      });
+      if (!res.ok) throw new Error(`註冊失敗（HTTP ${res.status}）`);
+      setNewDevice(await res.json());
+      setNewModel('');
+      setRefreshKey(k => k + 1);
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : 'Request failed');
+    } finally {
+      setRegistering(false);
+    }
+  }
+
+  async function setEnabled(deviceId: string, enabled: boolean) {
+    setBusyDeviceId(deviceId);
+    setActionError(null);
+
+    try {
+      const action = enabled ? 'enable' : 'disable';
+      const res = await authFetch(`/backend/api/devices/${deviceId}/${action}`, { method: 'POST' });
+      if (!res.ok) throw new Error(`操作失敗（HTTP ${res.status}）`);
+      setRefreshKey(k => k + 1);
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : 'Request failed');
+    } finally {
+      setBusyDeviceId(null);
+    }
+  }
+
   return (
     <div className="dev-page">
       <div className="dev-header-area">
@@ -200,6 +268,54 @@ export default function DeviceList() {
           {error}
         </div>
       )}
+
+      {actionError && (
+        <div className="alert alert-error">
+          <span className="alert-title">操作失敗：</span>
+          {actionError}
+        </div>
+      )}
+
+      <div className="card dev-register-card">
+        <div className="dev-register-header">
+          <h2 className="text-base font-medium text-primary">註冊裝置</h2>
+          <p className="text-xs text-secondary">
+            先在這裡註冊，才能讓裝置回報。註冊會產生這台專屬的 device_id 和 device_secret，
+            兩個都要寫進那台的 config.json，然後重新打包 LittleFS 分割區。
+          </p>
+        </div>
+
+        <form className="dev-register-form" onSubmit={registerDevice}>
+          <input
+            type="text"
+            className="form-input"
+            placeholder="裝置型號，例如 ESP32"
+            value={newModel}
+            onChange={e => setNewModel(e.target.value)}
+            required
+          />
+          <button type="submit" className="btn btn-primary" disabled={registering}>
+            {registering ? '註冊中...' : '註冊'}
+          </button>
+        </form>
+
+        {newDevice && (
+          <div className="alert alert-warning dev-new-device">
+            <span>
+              <span className="alert-title">只會顯示這一次。</span>
+              伺服器只留下 device_secret 的雜湊，關掉這段之後就再也讀不到了。弄丟的話只能重新註冊一台。
+            </span>
+            <pre className="dev-secret-block font-mono text-xs">{configSnippet(newDevice)}</pre>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => setNewDevice(null)}
+            >
+              我抄好了
+            </button>
+          </div>
+        )}
+      </div>
 
       <div className="dev-summary-cards">
         <div className="card dev-card">
@@ -298,14 +414,15 @@ export default function DeviceList() {
                 <th>韌體</th>
                 <th>最後回報</th>
                 <th>狀態</th>
+                <th>操作</th>
               </tr>
             </thead>
             <tbody>
               {filteredDevices.length === 0 && (
                 <tr>
-                  <td colSpan={4} className="dev-empty-state text-sm text-secondary">
+                  <td colSpan={5} className="dev-empty-state text-sm text-secondary">
                     {devices.length === 0
-                      ? '還沒有裝置回報過。裝置第一次成功呼叫 /api/check 之後就會出現在這裡。'
+                      ? '還沒有註冊任何裝置。用上面的表單註冊一台，把產生的 device_id 和 device_secret 寫進它的 config.json。'
                       : '沒有符合條件的裝置。'}
                   </td>
                 </tr>
@@ -336,9 +453,22 @@ export default function DeviceList() {
                     {d.last_seen}
                   </td>
                   <td className="dev-col-status">
-                    {d.online === true && <span className="badge badge-success">在線</span>}
-                    {d.online === false && <span className="badge badge-error">離線</span>}
-                    {d.online === null && <span className="badge badge-warning">未知</span>}
+                    {/* Disabled outranks the rest: whatever the clock says, the
+                        server is answering this unit 401 on its next poll. */}
+                    {!d.enabled && <span className="badge badge-warning">已停用</span>}
+                    {d.enabled && d.online === true && <span className="badge badge-success">在線</span>}
+                    {d.enabled && d.online === false && <span className="badge badge-error">離線</span>}
+                    {d.enabled && d.online === null && <span className="badge badge-warning">未知</span>}
+                  </td>
+                  <td className="dev-col-actions">
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      disabled={busyDeviceId === d.id}
+                      onClick={() => setEnabled(d.id, !d.enabled)}
+                    >
+                      {d.enabled ? '停用' : '重新啟用'}
+                    </button>
                   </td>
                 </tr>
               ))}

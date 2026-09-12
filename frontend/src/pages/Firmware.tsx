@@ -1,5 +1,6 @@
 import FirmwareList from "../views/FirmwareList"
 import FirmwareUpload from "../views/FirmwareUpload"
+import PublicKey from "../views/PublicKey"
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../auth/context';
 import { compareVersions, pickLatestActive } from '../version';
@@ -31,7 +32,7 @@ export interface FirmwareGroup {
 }
 
 export default function Firmware() {
-    const { session } = useAuth();
+    const { session, authFetch } = useAuth();
     const [firmwares, setFirmwares] = useState<Firmware[]>([]);
 
     const groupedFirmwares = useMemo<FirmwareGroup[]>(() => {
@@ -65,16 +66,14 @@ export default function Firmware() {
     const loadFirmwares = useCallback(() => {
         if (!session) return;
 
-        fetch('/backend/api/firmware/list', {
-            headers: { Authorization: `Bearer ${session.token}` },
-        })
+        authFetch('/backend/api/firmware/list')
             .then(res => {
                 if (!res.ok) throw new Error(`Failed to fetch firmwares (HTTP ${res.status})`);
                 return res.json() as Promise<Firmware[]>;
             })
             .then(setFirmwares)
             .catch(e => console.error("Failed to fetch firmwares:", e));
-    }, [session]);
+    }, [session, authFetch]);
 
     useEffect(loadFirmwares, [loadFirmwares]);
 
@@ -85,7 +84,6 @@ export default function Firmware() {
     }, []);
 
     const withdrawnCount = firmwares.filter(fw => !fw.active).length;
-    const canUpload = session?.role === 'admin';
 
     return (
         <div className="firmware-page">
@@ -103,14 +101,18 @@ export default function Firmware() {
                     )}
                 </div>
             </div>
-            <div className={canUpload ? 'firmware-manage-card' : 'firmware-manage-card is-list-only'}>
-                {/* Absent rather than disabled, matching the withdraw action:
-                    `/firmware/upload` is admin-gated, so an operator would fill
-                    the form in and collect a 403 at the end of the upload. */}
-                {/* Refetch rather than append what the form sent: the upload
-                    answers with a status, and the id, signature and timestamp
-                    the list renders only exist after the insert. */}
-                {canUpload && <FirmwareUpload onPublished={loadFirmwares} />}
+
+            <div className="firmware-manage-card">
+                {/* One column, in the order the work happens: an account sets
+                    a signing key before it can publish anything, and the
+                    publish button says so until it has. */}
+                <div className="firmware-publish-column">
+                    <PublicKey />
+                    {/* Refetch rather than append what the form sent: the upload
+                        answers with a status, and the id, signature and timestamp
+                        the list renders only exist after the insert. */}
+                    <FirmwareUpload onPublished={loadFirmwares} />
+                </div>
                 <FirmwareList groupedFirmwares={groupedFirmwares} onWithdrawn={handleWithdrawn} />
             </div>
         </div>
