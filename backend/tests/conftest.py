@@ -21,10 +21,9 @@ os.environ.setdefault("DATA_DIR", tempfile.mkdtemp(prefix="ota-test-data-"))
 os.environ.setdefault("JWT_SECRET", "test-secret-not-for-production-padded-to-length")
 
 
-# `KEYS_DIR` still points somewhere throwaway, because the setup scripts write
-# there and a test that runs one must not land in the developer's own keys. The
-# server itself reads nothing from it: firmware is verified against the public
-# key on the uploading account, so there is no key pair to seed here any more.
+# Throwaway, because the setup scripts write there and a test that runs one
+# must not land in the developer's own keys. The server itself reads nothing
+# from it: firmware is verified against the public key on the uploading account.
 os.environ.setdefault("KEYS_DIR", tempfile.mkdtemp(prefix="ota-test-keys-"))
 
 

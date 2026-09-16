@@ -3,9 +3,8 @@ import { useAuth } from '../auth/context';
 import { importPrivateKey, sha256Hex, signManifest, type SigningKey } from '../crypto/signing';
 import './FirmwareUpload.css';
 
-// Outcome rides alongside the text instead of being sniffed back out of it.
-// The alert styling used to key off the string containing "success", which any
-// rewording (a translation included) silently turns into a permanent error style.
+// Outcome rides alongside the text rather than being sniffed back out of it,
+// so rewording a message (translating it included) cannot change how it renders.
 type Notice = { text: string; ok: boolean };
 
 // The marker esp32/main/ota.cpp builds out of its own FIRMWARE_VERSION and
@@ -186,7 +185,7 @@ export default function FirmwareUpload({ onPublished }: { onPublished: () => voi
         <div className="upload-header">
           <h1 className="text-xl font-bold text-primary">發布韌體</h1>
           <p className="text-xs text-secondary">
-            上傳前先在自己的機器上簽名，伺服器只驗章不簽章。驗過之後，你自己的同型號裝置會在下一次回報時取得這個版本。
+            選私鑰就在這個瀏覽器分頁裡簽好，私鑰不會送出去。自己簽過的話，把簽章貼進下面那格。
           </p>
         </div>
         {/* Outside the form, and that is the point. Inside it, the private
@@ -212,11 +211,6 @@ export default function FirmwareUpload({ onPublished }: { onPublished: () => voi
                 : <span className="form-help">或拖曳檔案到這裡</span>}
             </div>
           </div>
-          <span className="form-help">
-            選了之後，下面的簽章會在這個瀏覽器分頁裡算好。私鑰不會上傳，也不會離開這台機器。
-            習慣用終端機的話可以不選，自己跑{' '}
-            <code className="font-mono">sign_firmware.py</code> 再把結果貼到簽章欄。
-          </span>
           {keyError && (
             <div className="alert alert-error">
               <span className="alert-title">私鑰讀取失敗：</span>
@@ -237,17 +231,12 @@ export default function FirmwareUpload({ onPublished }: { onPublished: () => voi
               name="signature"
               className="form-input font-mono"
               rows={3}
-              placeholder={signingKey ? '選好下面的映像檔就會自動填' : '貼上 sign_firmware.py 印出來的那一段'}
+              placeholder={signingKey ? '選好下面的映像檔就會自動填' : ''}
               value={signature}
               onChange={event => setSignature(event.target.value)}
               style={{ resize: 'vertical' }}
               required
             />
-            <span className="form-help">
-              {signingKey
-                ? '用上面那把私鑰在這個分頁裡簽的。換檔案或改版號都會重簽：簽章綁的是這三樣東西。'
-                : '沒有選私鑰的話，自己跑 sign_firmware.py 產生。換檔案的話要重簽：簽章綁的是這個檔案的雜湊。'}
-            </span>
           </div>
 
           <div className="form-group">
@@ -281,7 +270,7 @@ export default function FirmwareUpload({ onPublished }: { onPublished: () => voi
               <span>
                 <span className="alert-title">映像檔已辨識</span>
                 這個檔案自己說它是 <strong className="font-mono">{inspection.model} {inspection.version}</strong>，
-                下面兩格已經照它填好，不用也不能再改。
+                下面兩格照它填好了，不能改。
               </span>
             </div>
           )}
@@ -290,7 +279,7 @@ export default function FirmwareUpload({ onPublished }: { onPublished: () => voi
               <span>
                 <span className="alert-title">無法從映像檔判斷版本</span>
                 {inspection.reason}請自己填下面兩格，並確認它們跟 sketch 裡的 DEVICE_MODEL 和
-                FIRMWARE_VERSION 一致。填錯的話裝置會重開後回報舊版號，然後每次回報都被要求再更新一次。
+                FIRMWARE_VERSION 一致。
               </span>
             </div>
           )}
@@ -314,9 +303,6 @@ export default function FirmwareUpload({ onPublished }: { onPublished: () => voi
               readOnly={identified}
               required
             />
-            <span className="form-help">
-              {identified ? '從映像檔讀出來的。' : '必須與 sketch 裡的 DEVICE_MODEL 完全一致。'}
-            </span>
           </div>
 
           <div className="form-group">
@@ -332,9 +318,6 @@ export default function FirmwareUpload({ onPublished }: { onPublished: () => voi
               readOnly={identified}
               required
             />
-            <span className="form-help">
-              {identified ? '從映像檔讀出來的。' : '三段數字：主版本.次版本.修訂號'}
-            </span>
           </div>
 
           <div className="form-group">

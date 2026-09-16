@@ -52,16 +52,13 @@ export default function Register() {
         <div className="login-logo font-mono text-xs font-bold text-inverse">ESP</div>
         <div className="login-brand-text">
           <div className="login-brand-title text-2xl font-bold text-primary font-mono">ESPFleet</div>
-          <div className="login-brand-subtitle text-sm text-secondary font-mono">韌體發佈與裝置監控</div>
+          <div className="login-brand-subtitle text-sm text-secondary font-mono">韌體發布與裝置監控</div>
         </div>
       </div>
 
       <div className="card login-card">
         <div className="login-header">
           <h1 className="text-xl font-bold text-primary">建立帳號</h1>
-          <p className="text-sm text-secondary">
-            新帳號一開始是空的。你只會看到自己上傳的韌體和自己註冊的裝置。
-          </p>
         </div>
 
         <form className="login-form" onSubmit={handleSubmit}>

@@ -9,10 +9,9 @@ import { createContext, useContext } from 'react';
 // upload.
 //
 // Both live in sessionStorage: they survive a reload and die with the tab. Not
-// localStorage, even though the handle is now good for a fortnight, and
-// especially because of it. Writing a fortnight-long credential to disk is a
-// much larger theft window than the old hour-long one was, and buys only that
-// a closed browser comes back signed in.
+// localStorage, and the fortnight-long handle is the reason rather than an
+// exception to it. Writing a credential that lives that long to disk buys only
+// that a closed browser comes back signed in.
 
 // No role. What an account may do is decided by what it owns: every list is
 // scoped to it server-side, and there is nothing it can reach that it did not

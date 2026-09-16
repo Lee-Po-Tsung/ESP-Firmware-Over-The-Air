@@ -12,7 +12,7 @@
 // dev works, but a frontend served over plain HTTP from a LAN address does
 // not, and the failure is `crypto.subtle` being undefined rather than an
 // error anything would catch.
-export class NoWebCrypto extends Error {
+class NoWebCrypto extends Error {
   constructor() {
     super('這個瀏覽器分頁沒有 WebCrypto，只有 HTTPS 或 localhost 才有。');
   }

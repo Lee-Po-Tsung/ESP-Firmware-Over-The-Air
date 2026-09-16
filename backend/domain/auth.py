@@ -1,14 +1,10 @@
 """The rules an account's credentials must satisfy.
 
-Hashing and access-token minting used to live here and now belong to
-fastapi-users: pwdlib picks the algorithm, `JWTStrategy` signs the token. What
-is left is the part no library can decide for this project, kept in the domain
-so both doors onto account creation reach the same answer.
-
-Both doors matter. `scripts/create_user.py` is what seeds the first admin and
-`POST /api/auth/register` is what a new tenant uses, and the script once
-skipped the check the route enforced, which is how `--username ""` seeded a
-usable admin. Both now go through `UserManager`, which calls these.
+Hashing and token minting belong to fastapi-users. What is left is the part no
+library can decide for this project, kept in the domain so both doors onto
+account creation reach the same answer: `scripts/create_user.py`, which seeds
+a fresh install, and `POST /api/auth/register`. Both go through `UserManager`,
+which calls these.
 """
 
 from __future__ import annotations

@@ -418,9 +418,9 @@ bool check() {
     // the only moment the device speaks, so anything the server wants to show
     // has to ride along with it.
     JsonDocument req;
-    // From config, not from the MAC address this used to send. The server
-    // issues the id at registration, so it names a unit somebody registered
-    // rather than one that merely exists on the network.
+    // From config, not derived from the hardware. The server issues the id at
+    // registration, so it names a unit somebody registered rather than one
+    // that merely exists on the network.
     req["device_id"] = device_id;
     req["device_secret"] = device_secret;
     req["model"] = DEVICE_MODEL;

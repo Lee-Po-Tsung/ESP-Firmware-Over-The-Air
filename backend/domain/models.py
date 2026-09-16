@@ -38,14 +38,13 @@ class User:
     object the database adapter returns, so a dataclass that renames any of
     them stops being a user as far as the routers are concerned.
 
-    `hashed_password` is whatever pwdlib produced, which is argon2 for anything
-    hashed here and bcrypt for rows predating the migration. The hash names its
-    own algorithm, so nothing needs to record which.
+    `hashed_password` is whatever pwdlib produced. The hash names its own
+    algorithm, so nothing needs to record which.
 
-    `is_verified` and `is_superuser` are stored and never checked. The protocol
+    `is_verified` and `is_superuser` are stored and never checked; the protocol
     requires both. Verification needs a mail transport this server does not
-    have, and there is no privileged account any more: an account reaches what
-    it owns, which is the whole of the authorization model.
+    have, and there is no privileged account: an account reaches what it owns,
+    which is the whole of the authorization model.
 
     `public_key` is the key this account's uploads are verified against. The
     matching private key never reaches the server, which is the point: a
@@ -89,10 +88,10 @@ def new_download_id() -> str:
     return secrets.token_urlsafe(DOWNLOAD_ID_BYTES)
 
 
-# The identifier a registered unit reports, minted here rather than taken from
-# the MAC address it used to be. A MAC is not secret, and within one vendor
-# prefix it is enumerable, so it named devices that had not registered as
-# easily as ones that had.
+# The identifier a registered unit reports. Minted here rather than derived
+# from the MAC address, which is not secret and within one vendor prefix is
+# enumerable, so it would name unregistered devices as readily as registered
+# ones.
 DEVICE_ID_BYTES = 12
 
 # The secret that proves a check-in came from that unit. Long enough that

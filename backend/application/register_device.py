@@ -1,13 +1,11 @@
 """Register a device, and switch one off.
 
-A unit exists on the server because someone here said it does. Before this, a
-device row appeared the first time anything posted a device id to `/api/check`,
-which meant any string could become a device and it landed on whichever list
-the model name happened to match.
+A unit exists on the server because someone here said it does, which is what
+stops any string that posts to `/api/check` from becoming a device.
 
 Registration mints two values: the identifier the unit reports, and the secret
 that proves the report came from it. Both go into that unit's `config.json`, so
-one LittleFS image no longer serves a whole batch.
+one LittleFS image does not serve a whole batch.
 """
 
 from __future__ import annotations

@@ -19,7 +19,6 @@ import base64
 import binascii
 import hashlib
 import re
-from pathlib import Path
 
 from cryptography.exceptions import InvalidSignature, UnsupportedAlgorithm
 from cryptography.hazmat.primitives import hashes
@@ -34,15 +33,6 @@ from cryptography.hazmat.primitives.serialization import (
 
 class InvalidManifestField(ValueError):
     """A model or version that must not reach a signed manifest."""
-
-
-def calculate_sha256(filepath: str | Path) -> str:
-    """Return the hex SHA-256 digest of a file, streamed in 4 KiB chunks."""
-    sha256_hash = hashlib.sha256()
-    with open(filepath, "rb") as f:
-        for chunk in iter(lambda: f.read(4096), b""):
-            sha256_hash.update(chunk)
-    return sha256_hash.hexdigest()
 
 
 def calculate_sha256_bytes(data: bytes) -> str:
