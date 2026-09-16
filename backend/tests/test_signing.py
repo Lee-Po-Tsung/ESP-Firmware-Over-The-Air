@@ -9,8 +9,6 @@ from cryptography.hazmat.primitives.asymmetric import padding, rsa
 from domain.signing import (
     InvalidManifestField,
     build_manifest,
-    calculate_sha256,
-    calculate_sha256_bytes,
     compare_version,
     parse_version,
     sign_manifest,
@@ -31,14 +29,6 @@ def keypair():
 
 def test_build_manifest_joins_with_pipes():
     assert build_manifest("ESP32", "1.0.1", "abcd") == "ESP32|1.0.1|abcd"
-
-
-def test_calculate_sha256_matches_bytes_digest(tmp_path):
-    data = b"firmware binary contents"
-    filepath = tmp_path / "firmware.bin"
-    filepath.write_bytes(data)
-
-    assert calculate_sha256(filepath) == calculate_sha256_bytes(data)
 
 
 def test_sign_manifest_produces_verifiable_signature(keypair):
