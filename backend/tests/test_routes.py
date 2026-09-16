@@ -424,11 +424,8 @@ def test_firmware_list_api_carries_active_flag(client):
 
 
 def test_firmware_list_created_at_carries_a_utc_offset(client):
-    """The two list routes used to disagree, and only one of them was right.
-
-    An ISO string with no offset is read as local time by a browser, so a
-    dashboard showed upload times shifted while device times beside them were
-    correct.
+    """An ISO string with no offset is read as local time by a browser, which
+    shows upload times shifted against the device times beside them.
     """
     firmware = make_firmware(firmware_id=1)
     app.dependency_overrides[get_firmware_repository] = lambda: FakeFirmwareRepository([firmware])

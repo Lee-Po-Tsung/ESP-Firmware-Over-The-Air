@@ -4,14 +4,11 @@
     uv run python backend/scripts/create_user.py --email bob@example.com \
         --public-key backend/keys/public_key.pem
 
-Signup is open, so this is no longer the only door. It stays for seeding: a
-fresh install, a test fixture and a CI run all want an account without driving
-a browser, and `frontend/e2e/backend.sh` is built on it.
+For seeding: a fresh install, a test fixture and a CI run all want an account
+without driving a browser, and `frontend/e2e/backend.sh` is built on it.
 
-It goes through the same `UserManager.create` the register route uses, which is
-the point of it being written this way. The script once carried its own
-shortcut past the credential checks, and `--username ""` seeded a usable admin
-because of it. Anything that becomes an account passes the same door.
+It goes through the same `UserManager.create` the register route uses, so
+anything that becomes an account passes the same credential checks.
 
 The password is read interactively (or from the OTA_USER_PASSWORD env var for
 non-interactive use) so it never lands in shell history.

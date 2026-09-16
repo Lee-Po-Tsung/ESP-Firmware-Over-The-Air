@@ -122,14 +122,10 @@ class CheckUpdate:
     def execute(self, req: CheckUpdateRequest) -> CheckUpdateResult:
         # Identity first, before anything is read or written. A caller that
         # cannot prove which device it is gets no answer and leaves no trace,
-        # which is the whole of what registration buys: the previous version of
-        # this method wrote a device row before it had decided anything, so a
-        # request for a model that does not exist still left a record behind.
+        # which is the whole of what registration buys.
         device = self._devices.get_by_device_id(req.device_id)
-        # A row with no owner is one written before registration existed. It
-        # has no secret either, so it could not get past the next check, but
-        # the ownerless case is named because everything below needs an account
-        # to scope to.
+        # An ownerless row cannot get past the secret check either, but it is
+        # named here because everything below needs an account to scope to.
         if device is None or not device.enabled or device.owner_id is None:
             raise UnknownDevice(req.device_id)
         if not secret_matches(req.device_secret, device.secret_hash):

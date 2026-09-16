@@ -97,9 +97,8 @@ class CheckRequest(BaseModel):
     """What `ota.cpp:check()` sends.
 
     `device_id` and `device_secret` come out of that unit's `config.json` and
-    are what the server identifies the caller by. Both are required: there is
-    no anonymous check-in any more, because an answer needs an account to look
-    the firmware up in.
+    are what the server identifies the caller by. Both are required, because an
+    answer needs an account to look the firmware up in.
 
     The telemetry is required rather than optional for a different reason: a
     field that silently stopped arriving would surface as a null column on the

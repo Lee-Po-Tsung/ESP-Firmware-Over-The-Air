@@ -156,7 +156,8 @@ def test_execute_stores_data_under_its_content_hash(keypair):
 
 
 def test_execute_stores_nothing_when_the_version_is_malformed(keypair):
-    """A `v` prefix used to upload cleanly and then never reach a single device.
+    """A `v` prefix parses to (0, 0, 0) on the device, so it would lose to every
+    real release and reach nothing.
 
     Reached through the fallback: this image carries no marker, so the typed
     version is the one that gets checked.
@@ -323,8 +324,7 @@ def test_execute_keeps_the_stored_blob_when_the_version_is_taken(keypair):
 def test_execute_stores_nothing_when_the_signature_does_not_verify(keypair):
     """Verified before the blob is written, so a rejection leaves no orphan.
 
-    Same ordering the old sign-before-store had, for the same reason: the step
-    that can fail on the contents runs before anything reaches disk.
+    The step that can fail on the contents runs before anything reaches disk.
     """
     repo, storage = FakeFirmwareRepository(), FakeStorage()
     use_case = UploadFirmware(repo, storage)
@@ -404,7 +404,7 @@ def test_execute_refuses_a_signature_over_different_bytes(keypair):
 
 
 def test_execute_refuses_an_account_with_no_public_key(keypair):
-    """Nothing falls back to a server key, because there is no longer one."""
+    """There is no server key to fall back to, so this is a refusal, not a default."""
     repo, storage = FakeFirmwareRepository(), FakeStorage()
     use_case = UploadFirmware(repo, storage)
 
