@@ -124,7 +124,7 @@ test('an account with only a browser generates a key, signs, and publishes', asy
   await register(page, uniqueEmail());
 
   const download = page.waitForEvent('download');
-  await page.getByRole('button', { name: '在瀏覽器產生一組' }).click();
+  await page.getByRole('button', { name: '在瀏覽器產生金鑰' }).click();
   const privateKey = await (await download).path();
 
   await expect(page.locator('textarea.key-input')).toHaveValue(/^-----BEGIN PUBLIC KEY-----/);
@@ -157,7 +157,7 @@ test('the private key is never sent to the server', async ({ page }) => {
   await register(page, uniqueEmail());
 
   const download = page.waitForEvent('download');
-  await page.getByRole('button', { name: '在瀏覽器產生一組' }).click();
+  await page.getByRole('button', { name: '在瀏覽器產生金鑰' }).click();
   const privateKey = await (await download).path();
   await page.getByRole('button', { name: '設定公鑰' }).click();
   await expect(page.getByText('已設定')).toBeVisible();

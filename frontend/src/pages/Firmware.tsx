@@ -90,7 +90,7 @@ export default function Firmware() {
             <div className="main-card-header firmware-dashboard-header">
                 <div className="header-titles">
                     <h1 className="text-xl font-bold text-primary">韌體管理</h1>
-                    <p className="text-xs text-secondary">發布新版本，並追蹤每個型號的發布紀錄。裝置會在下一次回報時取得更新。</p>
+                    <p className="text-xs text-secondary">發布新版本，追蹤每個型號的紀錄。裝置在下次回報時取得更新。</p>
                 </div>
 
                 <div className="firmware-summary">

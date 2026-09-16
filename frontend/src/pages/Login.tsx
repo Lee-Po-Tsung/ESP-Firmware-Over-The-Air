@@ -32,16 +32,13 @@ export default function Login() {
         <div className="login-logo font-mono text-xs font-bold text-inverse">ESP</div>
         <div className="login-brand-text">
           <div className="login-brand-title text-2xl font-bold text-primary font-mono">ESPFleet</div>
-          <div className="login-brand-subtitle text-sm text-secondary font-mono">韌體發佈與裝置監控</div>
+          <div className="login-brand-subtitle text-sm text-secondary font-mono">韌體發布與裝置監控</div>
         </div>
       </div>
 
       <div className="card login-card">
         <div className="login-header">
           <h1 className="text-xl font-bold text-primary">登入控制台</h1>
-          <p className="text-sm text-secondary">
-            用你的工作帳號登入，即可管理韌體版本並查看所有裝置的即時狀態。
-          </p>
         </div>
 
         <form className="login-form" onSubmit={handleSubmit}>

@@ -50,7 +50,7 @@ export default function ResetPassword() {
         <div className="login-logo font-mono text-xs font-bold text-inverse">ESP</div>
         <div className="login-brand-text">
           <div className="login-brand-title text-2xl font-bold text-primary font-mono">ESPFleet</div>
-          <div className="login-brand-subtitle text-sm text-secondary font-mono">韌體發佈與裝置監控</div>
+          <div className="login-brand-subtitle text-sm text-secondary font-mono">韌體發布與裝置監控</div>
         </div>
       </div>
 

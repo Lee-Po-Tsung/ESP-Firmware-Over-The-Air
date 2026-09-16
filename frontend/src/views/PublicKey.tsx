@@ -72,9 +72,6 @@ export default function PublicKey() {
       <div className="key-header">
         <div>
           <h2 className="text-base font-medium text-primary">簽章公鑰</h2>
-          <p className="text-xs text-secondary">
-            伺服器不保管任何私鑰，上傳的韌體是拿這把公鑰驗章的。私鑰留在你自己的機器上。
-          </p>
         </div>
         <span className={hasKey ? 'badge badge-success' : 'badge badge-warning'}>
           {hasKey ? '已設定' : '尚未設定'}
@@ -85,10 +82,9 @@ export default function PublicKey() {
         <div className="alert alert-warning">
           <span>
             <span className="alert-title">還不能發布韌體。</span>
-            按下面的按鈕產生一組金鑰，私鑰會存成檔案下載到你的電腦，公鑰會填進下面那格。
+            按下面的按鈕產生一組金鑰，私鑰會下載到你的電腦，公鑰自動填進下方。
             同一把公鑰也要放進每台裝置的 config.json，裝置才驗得過下載回來的韌體。
-            已經有金鑰的話（例如用 <code className="font-mono">generate_keys.py</code> 產的），
-            直接把 <code className="font-mono">public_key.pem</code> 的內容貼進去。
+            已經有金鑰的話，直接貼上 <code className="font-mono">public_key.pem</code> 的內容。
           </span>
         </div>
       )}
@@ -114,8 +110,7 @@ export default function PublicKey() {
           {handedOver && (
             <div className="alert alert-warning">
               <span className="alert-title">私鑰只會給你這一次。</span>
-              它沒有存在伺服器上，這一頁關掉就沒有了。發布韌體要用它簽章，弄丟的話只能重產一把，
-              並且重燒每一台裝置的 config.json。
+              伺服器不保管它，這一頁關掉就沒有了。
             </div>
           )}
 
@@ -126,7 +121,7 @@ export default function PublicKey() {
               onClick={handleGenerate}
               disabled={generating}
             >
-              {generating ? '產生中...' : '在瀏覽器產生一組'}
+              {generating ? '產生中...' : '在瀏覽器產生金鑰'}
             </button>
             <button type="submit" className="btn btn-primary" disabled={submitting}>
               {submitting ? '設定中...' : hasKey ? '換成這把' : '設定公鑰'}
@@ -137,13 +132,6 @@ export default function PublicKey() {
               </button>
             )}
           </div>
-
-          {hasKey && (
-            <p className="form-help">
-              換金鑰只影響之後上傳的版本。已經發布的韌體帶著舊金鑰簽出來的簽章，裝置也還是拿自己
-              config.json 裡那把在驗，所以不重燒裝置的話，現場什麼都不會變。
-            </p>
-          )}
         </form>
       ) : (
         <button

@@ -345,14 +345,14 @@ export default function DeviceList() {
       {failedDevices.length > 0 && (
         <div className="alert alert-error">
           <span className="alert-title">有裝置更新失敗：</span>
-          {failedDevices.map(d => `${d.id}（${errorLabel(d.last_error!)}）`).join('、')}。裝置沒有重開機，仍在跑原本的韌體，同一個版本連續失敗超過 3 次後就不會再重試。
+          {failedDevices.map(d => `${d.id}（${errorLabel(d.last_error!)}）`).join('、')}。裝置沒有重開機，仍在跑原本的韌體，同一個版本連續失敗 4 次後就不再重試。
         </div>
       )}
 
       {outdatedDevices.length > 0 && (
         <div className="alert alert-warning">
           <span className="alert-title">有裝置的韌體版本落後：</span>
-          {outdatedDevices.length} 台裝置不是最新韌體：{outdatedDevices.map(d => d.id).join('、')}，這些裝置會在下次回報心跳時自動更新，離線的裝置則要重新上線。
+          {outdatedDevices.length} 台裝置不是最新韌體：{outdatedDevices.map(d => d.id).join('、')}，這些裝置會在下次回報時自動更新，離線的要重新上線。
         </div>
       )}
 
