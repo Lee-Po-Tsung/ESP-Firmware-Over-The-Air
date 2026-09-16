@@ -53,10 +53,6 @@ export default function FirmwareList({ groupedFirmwares, onWithdrawn }: {
         setMessage('登入階段已過期，請重新登入。');
         return;
       }
-      if (res.status === 403) {
-        setMessage('只有管理員帳號可以下架版本。');
-        return;
-      }
       if (res.status === 404) {
         setMessage('該版本已不在紀錄中。');
         return;
