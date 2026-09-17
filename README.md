@@ -48,20 +48,9 @@ All three parties build the same string, `model|version|sha256_hex`, and two of 
 
 `esp32/` is the Arduino device firmware. `ota.h` and `ota.cpp` drop into a sketch; `main.ino` is a working example.
 
-## Accounts
-
-Sign up at `POST /api/auth/register` or from the dashboard, then log in at `POST /api/auth/login` (an OAuth2 password form, so the address goes in the field the standard calls `username`). Send the access token as `Authorization: Bearer <token>` and trade the refresh handle at `POST /api/auth/refresh`, which rotates it.
-
-There are no roles. An account sees the firmware it uploaded and the devices it registered, so a new account arrives at two empty lists.
-
-`/api/download` is unauthenticated because the firmware has no credential to send; the link's random identifier is what guards it. `/api/check` is authenticated by the per-device secret rather than by an account.
-
 ## Known limits
 
-Local development serves HTTPS with a self-signed certificate that the device pins as its CA. Production TLS through a reverse proxy with automatic certificates is M5.
-
-The device secret sits in LittleFS in the clear, so dumping a unit's flash yields it. Making it genuinely secret needs flash encryption and Secure Boot v2, also M5. It only ever identifies a device and cannot publish or withdraw anything.
-
-Password reset has no mail transport. The token is written to the server log for an operator to hand over.
-
-Unreferenced firmware blobs are never swept.
+- Local development serves HTTPS with a self-signed certificate that the device pins as its CA.
+- The device secret sits in LittleFS in the clear, so dumping a unit's flash yields it. Making it genuinely secret needs flash encryption and Secure Boot v2.
+- Password reset has no mail transport. The token is written to the server log for an operator to hand over.
+- Unreferenced firmware blobs are never swept.
