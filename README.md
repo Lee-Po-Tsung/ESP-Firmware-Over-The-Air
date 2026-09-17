@@ -32,21 +32,16 @@ All three parties build the same string, `model|version|sha256_hex`, and two of 
 
 ## Documentation
 
-[Tutorial](docs/tutorial.md) walks the whole path once, from preparing a sketch to publishing an update and watching it land.
-
-[Architecture](docs/architecture.md) explains what each party checks and why the checks run in the order they do.
-
-[Development](docs/development.md) covers running the server and dashboard locally, the test suites, and the migration rules.
-
-[CONTRIBUTING](CONTRIBUTING.md) covers how work is tracked and how a change gets merged. The plan lives in the repository's GitHub milestones, with the work itself in issues.
+- [Tutorial](docs/tutorial.md) walks the whole path once, from preparing a sketch to publishing an update and watching it land.
+- [Architecture](docs/architecture.md) explains what each party checks and why the checks run in the order they do.
+- [Development](docs/development.md) covers running the server and dashboard locally, the test suites, and the migration rules.
+- [CONTRIBUTING](CONTRIBUTING.md) covers how work is tracked and how a change gets merged. The plan lives in the repository's GitHub milestones, with the work itself in issues.
 
 ## Layout
 
-`backend/` is the FastAPI server, in a pragmatic Clean Architecture: `api -> application -> domain`, with `infrastructure` implementing the ports.
-
-`frontend/` is the React dashboard. It generates signing keys and signs uploads in the browser with WebCrypto, so publishing needs an account and a browser and nothing else.
-
-`esp32/` is the Arduino device firmware. `ota.h` and `ota.cpp` drop into a sketch; `main.ino` is a working example.
+- `backend/` is the FastAPI server, in a pragmatic Clean Architecture: `api -> application -> domain`, with `infrastructure` implementing the ports.
+- `frontend/` is the React dashboard. It generates signing keys and signs uploads in the browser with WebCrypto, so publishing needs an account and a browser and nothing else.
+- `esp32/` is the Arduino device firmware. `ota.h` and `ota.cpp` drop into a sketch; `main.ino` is a working example.
 
 ## Known limits
 
