@@ -4,6 +4,10 @@ Signed over-the-air firmware updates for ESP32 devices. A FastAPI server stores 
 
 Whoever builds an image signs it. The server holds no private key and only verifies, so a compromised server cannot produce firmware any device will accept.
 
+<img width="1400" height="868" alt="image" src="https://github.com/user-attachments/assets/cf8aab81-6822-4366-9b6e-edbe789a38d2" />
+<img width="1400" height="868" alt="image" src="https://github.com/user-attachments/assets/2de1fd9f-3c9b-4c65-840f-60052655a811" />
+
+
 ## How an update travels
 
 ```
