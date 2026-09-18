@@ -102,6 +102,45 @@ arduino-cli compile --fqbn esp32:esp32:esp32s3 \
 
 `esp32/scripts/gen_compile_commands.sh` fills `esp32/.cdb/` with a compile database for clangd. Without it every Arduino include fails to resolve and the whole file reports as errors. `esp32/.clangd` strips the four GCC-only flags clang rejects and tells clangd that `.ino` is C++ with `Arduino.h` implied.
 
+## The device's config
+
+`data/config.json` is one unit's LittleFS contents: its WiFi credentials, the server URL it dials, its `device_id` and `device_secret`, the CA it pins, and the public key it verifies firmware against. Copy `data/config.json.example` and fill it in. It is git-ignored, and it carries a WiFi password and a device secret in the clear.
+
+**The device pins a certificate, not an address.** `ca_cert` holds the bytes of `backend/keys/tls_cert.pem` as they were when the image was built. Regenerating that certificate breaks the pin even when the IP has not changed, and the board reports only `http connect error: -1`, the same thing it says for a server that is down. Compare the two before looking anywhere else:
+
+```bash
+openssl x509 -in backend/keys/tls_cert.pem -noout -fingerprint -sha256
+uv run python -c "import json,pathlib; print(json.loads(pathlib.Path('data/config.json').read_text())['ca_cert'])" \
+  | openssl x509 -noout -fingerprint -sha256
+```
+
+`server_url` has to name an IP in the certificate's SAN, so changing networks means reissuing the certificate with `generate_tls_cert.py` and then rebuilding the filesystem image below.
+
+## Flashing the filesystem
+
+`config.json` reaches the board as a LittleFS image written to the partition `esp32/main/partitions.csv` calls `spiffs`, at offset `0x2b0000` and `0x140000` long. Uploading a sketch does not touch it, which is why a stale pinned certificate survives every reflash of the firmware.
+
+```bash
+MKLITTLEFS=$(find ~/.arduino15/packages/esp32/tools/mklittlefs -type f -name mklittlefs | head -1)
+"$MKLITTLEFS" -c data -b 4096 -p 256 -s 0x140000 /tmp/littlefs.bin
+
+~/.arduino15/packages/esp32/tools/esptool_py/*/esptool --chip esp32s3 --port /dev/ttyACM0 \
+  --baud 921600 write-flash 0x2b0000 /tmp/littlefs.bin
+```
+
+The whole `data/` directory goes in, so `config.json.example` rides along. It is half a kilobyte against a 1.25 MB partition and nothing reads it.
+
+## Reading the serial log
+
+```bash
+stty -F /dev/ttyACM0 115200 raw -echo -hupcl
+cat /dev/ttyACM0
+```
+
+`arduino-cli monitor` comes back empty against this board's USB CDC. `cat` on the device node works.
+
+The board prints its check-in body on every poll, with `device_secret` replaced by `<redacted>`. Flash can be dumped by anyone holding the board, so serial adds no capability to them, but a serial log is a thing people paste into an issue and a flash dump is not. A build from before that change prints the real secret several times a minute, so check what the board is running before capturing a log you intend to share.
+
 ## Frontend conventions
 
 There is no Prettier and there are no stylistic ESLint rules. The 2-space convention is enforced only by `.editorconfig`, which is inert in VS Code without the EditorConfig extension. If a contributor's saves keep reformatting to 4 spaces, check that before suspecting anything else. JetBrains IDEs and vim with an editorconfig plugin honor it natively.
